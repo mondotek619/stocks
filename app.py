@@ -147,6 +147,13 @@ def obter_dados(ticker):
 
         nome_completo = info.get("shortName", ticker)
 
+        # ---- rácios extra para os Factor Grades ----
+        price_to_book = info.get("priceToBook", np.nan)
+        revenue_growth = info.get("revenueGrowth", np.nan)   # fração, ex: 0.12 = 12%
+        earnings_growth = info.get("earningsGrowth", np.nan)  # fração
+        roe = info.get("returnOnEquity", np.nan)              # fração
+        profit_margin = info.get("profitMargins", np.nan)     # fração
+
         return {
             "nome_completo": nome_completo,
             "preco": preco_atual,
@@ -159,6 +166,11 @@ def obter_dados(ticker):
             "dist_do_minimo": dist_do_minimo,
             "dist_do_maximo": dist_do_maximo,
             "moeda": info.get("currency", ""),
+            "price_to_book": price_to_book,
+            "revenue_growth": revenue_growth,
+            "earnings_growth": earnings_growth,
+            "roe": roe,
+            "profit_margin": profit_margin,
         }
     except Exception as e:
         return {"erro": str(e)}
@@ -178,9 +190,97 @@ def carregar_carteira():
                 "pe_ratio": np.nan, "dividend_yield": np.nan, "market_cap": np.nan,
                 "low_52": np.nan, "high_52": np.nan, "dist_do_minimo": np.nan,
                 "dist_do_maximo": np.nan, "moeda": "",
+                "price_to_book": np.nan, "revenue_growth": np.nan,
+                "earnings_growth": np.nan, "roe": np.nan, "profit_margin": np.nan,
             })
         linhas.append(linha)
     return pd.DataFrame(linhas)
+
+
+# ------------------------------------------------------------------
+# FACTOR GRADES (A-D) E QUANT RATING
+# ------------------------------------------------------------------
+
+def _pontos_metrica(valor, cortes, maior_melhor=True):
+    """Converte um rácio num score de 1 a 4 com base em 3 cortes ascendentes.
+    Se o valor não existir, devolve 2.0 (neutro) para não penalizar dados em falta."""
+    if valor is None or pd.isna(valor):
+        return 2.0
+    c0, c1, c2 = cortes
+    if maior_melhor:
+        if valor >= c2:
+            return 4.0
+        elif valor >= c1:
+            return 3.0
+        elif valor >= c0:
+            return 2.0
+        return 1.0
+    else:
+        if valor <= c0:
+            return 4.0
+        elif valor <= c1:
+            return 3.0
+        elif valor <= c2:
+            return 2.0
+        return 1.0
+
+
+def _nota_de_score(score):
+    """Converte um score médio (1-4) numa nota de letra A-D."""
+    if score >= 3.5:
+        return "A"
+    elif score >= 2.5:
+        return "B"
+    elif score >= 1.5:
+        return "C"
+    return "D"
+
+
+def calcular_factor_grades(row):
+    """Calcula as notas de Valuation, Growth e Profitability e o Quant Rating de uma linha."""
+    # Valuation: P/E e P/B mais baixos = melhor
+    score_valuation = np.mean([
+        _pontos_metrica(row.get("pe_ratio"), [15, 20, 30], maior_melhor=False),
+        _pontos_metrica(row.get("price_to_book"), [2, 4, 6], maior_melhor=False),
+    ])
+
+    # Growth: crescimento de receita e de resultados mais alto = melhor (valores em %)
+    receita_pct = row.get("revenue_growth") * 100 if pd.notna(row.get("revenue_growth")) else np.nan
+    resultados_pct = row.get("earnings_growth") * 100 if pd.notna(row.get("earnings_growth")) else np.nan
+    score_growth = np.mean([
+        _pontos_metrica(receita_pct, [0, 8, 15], maior_melhor=True),
+        _pontos_metrica(resultados_pct, [0, 8, 15], maior_melhor=True),
+    ])
+
+    # Profitability: ROE e margem líquida mais altos = melhor (valores em %)
+    roe_pct = row.get("roe") * 100 if pd.notna(row.get("roe")) else np.nan
+    margem_pct = row.get("profit_margin") * 100 if pd.notna(row.get("profit_margin")) else np.nan
+    score_profitability = np.mean([
+        _pontos_metrica(roe_pct, [5, 12, 20], maior_melhor=True),
+        _pontos_metrica(margem_pct, [5, 12, 20], maior_melhor=True),
+    ])
+
+    score_quant = np.mean([score_valuation, score_growth, score_profitability])
+    if score_quant >= 3.3:
+        rating = "Strong Buy"
+    elif score_quant >= 2.3:
+        rating = "Buy"
+    else:
+        rating = "Hold"
+
+    return pd.Series({
+        "grade_valuation": _nota_de_score(score_valuation),
+        "grade_growth": _nota_de_score(score_growth),
+        "grade_profitability": _nota_de_score(score_profitability),
+        "score_quant": score_quant,
+        "quant_rating": rating,
+    })
+
+
+def aplicar_factor_grades(df):
+    """Adiciona as colunas de Factor Grades e Quant Rating ao DataFrame da carteira."""
+    notas = df.apply(calcular_factor_grades, axis=1)
+    return pd.concat([df, notas], axis=1)
 
 
 # ------------------------------------------------------------------
@@ -208,6 +308,7 @@ with st.sidebar:
 # ------------------------------------------------------------------
 with st.spinner("A carregar cotações..."):
     df = carregar_carteira()
+    df = aplicar_factor_grades(df)
 
 st.title("📊 Painel Diário da Carteira")
 
@@ -232,8 +333,8 @@ st.divider()
 # ------------------------------------------------------------------
 # TABS
 # ------------------------------------------------------------------
-tab_resumo, tab_alertas, tab_alocacao, tab_detalhe = st.tabs(
-    ["📋 Resumo", "🚨 Alertas", "🥧 Alocação", "🔍 Detalhe por Ativo"]
+tab_resumo, tab_alertas, tab_alocacao, tab_ratings, tab_reforco, tab_detalhe = st.tabs(
+    ["📋 Resumo", "🚨 Alertas", "🥧 Alocação", "🏆 Quant Ratings", "💎 Oportunidades de Reforço", "🔍 Detalhe por Ativo"]
 )
 
 # ---------------- TAB RESUMO ----------------
@@ -251,6 +352,7 @@ with tab_resumo:
         "Div. Yield": tabela["dividend_yield"].map(formata_pct),
         "Cap. Bolsista": tabela["market_cap"].map(formata_grande),
         "Dist. Mín 52s": tabela["dist_do_minimo"].map(formata_pct),
+        "Rating": tabela["quant_rating"],
     })
 
     def cor_variacao(val):
@@ -263,7 +365,12 @@ with tab_resumo:
         cor = "#00c853" if v >= 0 else "#ff5252"
         return f"color: {cor}; font-weight: 600;"
 
-    styled = tabela_view.style.map(cor_variacao, subset=["Var. Dia"])
+    def cor_rating(val):
+        cores = {"Strong Buy": "#00c853", "Buy": "#7cd992", "Hold": "#ffb300"}
+        cor = cores.get(val, "")
+        return f"color: {cor}; font-weight: 600;" if cor else ""
+
+    styled = tabela_view.style.map(cor_variacao, subset=["Var. Dia"]).map(cor_rating, subset=["Rating"])
     st.dataframe(styled, use_container_width=True, height=600, hide_index=True)
 
 # ---------------- TAB ALERTAS ----------------
@@ -341,6 +448,93 @@ with tab_alocacao:
     )
     st.plotly_chart(fig_bar, use_container_width=True)
 
+# ---------------- TAB QUANT RATINGS ----------------
+with tab_ratings:
+    st.subheader("Factor Grades & Quant Rating")
+    st.caption(
+        "Notas de A (melhor) a D (pior) calculadas a partir de rácios do yfinance: "
+        "Valuation (P/E, P/B), Growth (crescimento de receita/resultados) e "
+        "Profitability (ROE, margem líquida). O Quant Rating combina as três notas."
+    )
+
+    cores_nota = {"A": "#00c853", "B": "#7cd992", "C": "#ffb300", "D": "#ff5252"}
+    cores_rating = {"Strong Buy": "#00c853", "Buy": "#7cd992", "Hold": "#ffb300"}
+
+    n_cols = 4
+    linhas_ordenadas = df.sort_values("score_quant", ascending=False).reset_index(drop=True)
+    for i in range(0, len(linhas_ordenadas), n_cols):
+        cols = st.columns(n_cols)
+        for col, (_, row) in zip(cols, linhas_ordenadas.iloc[i:i + n_cols].iterrows()):
+            with col:
+                cor_r = cores_rating.get(row["quant_rating"], "#888")
+                st.markdown(f"""
+                <div class="metric-card">
+                    <b>{row['ticker']}</b> — {row['nome']}<br>
+                    <span style="color:{cor_r}; font-weight:700;">{row['quant_rating']}</span><br><br>
+                    Valuation: <span style="color:{cores_nota.get(row['grade_valuation'])}; font-weight:700;">{row['grade_valuation']}</span> &nbsp;
+                    Growth: <span style="color:{cores_nota.get(row['grade_growth'])}; font-weight:700;">{row['grade_growth']}</span> &nbsp;
+                    Profitability: <span style="color:{cores_nota.get(row['grade_profitability'])}; font-weight:700;">{row['grade_profitability']}</span>
+                </div>
+                """, unsafe_allow_html=True)
+
+# ---------------- TAB OPORTUNIDADES DE REFORÇO ----------------
+with tab_reforco:
+    st.subheader("Oportunidades de Reforço")
+    st.caption(
+        "Ativos ordenados do mais para o menos atrativo, combinando o Quant Rating "
+        "com a proximidade ao mínimo de 52 semanas."
+    )
+
+    reforco = df.copy()
+    # Score de oportunidade: score_quant (0-4) + bónus por estar perto do mínimo de 52 semanas
+    reforco["bonus_minimo"] = reforco["dist_do_minimo"].apply(
+        lambda x: max(0, (20 - x) / 20) if pd.notna(x) and x <= 20 else 0
+    )
+    reforco["score_oportunidade"] = reforco["score_quant"] + reforco["bonus_minimo"]
+    reforco = reforco.sort_values("score_oportunidade", ascending=False)
+
+    tabela_reforco = pd.DataFrame({
+        "Ticker": reforco["ticker"],
+        "Nome": reforco["nome"],
+        "Rating": reforco["quant_rating"],
+        "Valuation": reforco["grade_valuation"],
+        "Growth": reforco["grade_growth"],
+        "Profitability": reforco["grade_profitability"],
+        "Preço": reforco.apply(lambda r: f"{r['preco']:.2f} {r['moeda']}" if pd.notna(r["preco"]) else "N/D", axis=1),
+        "Dist. Mín 52s": reforco["dist_do_minimo"].map(formata_pct),
+        "Peso Atual": reforco["peso"].map(lambda x: f"{x}%"),
+    })
+
+    def cor_rating_reforco(val):
+        cores = {"Strong Buy": "#00c853", "Buy": "#7cd992", "Hold": "#ffb300"}
+        cor = cores.get(val, "")
+        return f"color: {cor}; font-weight: 600;" if cor else ""
+
+    def cor_nota_reforco(val):
+        cores = {"A": "#00c853", "B": "#7cd992", "C": "#ffb300", "D": "#ff5252"}
+        cor = cores.get(val, "")
+        return f"color: {cor}; font-weight: 600;" if cor else ""
+
+    styled_reforco = (
+        tabela_reforco.style
+        .map(cor_rating_reforco, subset=["Rating"])
+        .map(cor_nota_reforco, subset=["Valuation", "Growth", "Profitability"])
+    )
+    st.dataframe(styled_reforco, use_container_width=True, height=600, hide_index=True)
+
+    top3 = reforco.head(3)
+    if not top3.empty:
+        st.divider()
+        st.markdown("**🥇 Top 3 para reforçar agora**")
+        for _, r in top3.iterrows():
+            st.markdown(f"""
+            <div class="alert-card-green">
+                <b>{r['ticker']} — {r['nome']}</b> ({r['quant_rating']})<br>
+                Valuation {r['grade_valuation']} · Growth {r['grade_growth']} · Profitability {r['grade_profitability']}
+                {' · a ' + formata_pct(r['dist_do_minimo']) + ' do mínimo de 52 semanas' if pd.notna(r['dist_do_minimo']) and r['dist_do_minimo'] <= 20 else ''}
+            </div>
+            """, unsafe_allow_html=True)
+
 # ---------------- TAB DETALHE ----------------
 with tab_detalhe:
     ticker_escolhido = st.selectbox(
@@ -360,29 +554,4 @@ with tab_detalhe:
     col_e.metric("Mínimo 52 semanas", f"{linha['low_52']:.2f}" if pd.notna(linha["low_52"]) else "N/D",
                  delta=formata_pct(linha["dist_do_minimo"]) + " acima do mínimo")
     col_f.metric("Máximo 52 semanas", f"{linha['high_52']:.2f}" if pd.notna(linha["high_52"]) else "N/D",
-                 delta="-" + formata_pct(linha["dist_do_maximo"]) + " abaixo do máximo")
-
-    st.divider()
-    st.subheader(f"Histórico de Preço — {ticker_escolhido} (1 ano)")
-    try:
-        hist = yf.Ticker(ticker_escolhido).history(period="1y")
-        fig_line = go.Figure()
-        fig_line.add_trace(go.Scatter(
-            x=hist.index, y=hist["Close"], mode="lines",
-            line=dict(color="#00c853", width=2), fill="tozeroy",
-            fillcolor="rgba(0,200,83,0.08)",
-        ))
-        fig_line.update_layout(
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)",
-            font_color="white",
-            margin=dict(l=10, r=10, t=10, b=10),
-            xaxis_title="", yaxis_title="Preço",
-        )
-        st.plotly_chart(fig_line, use_container_width=True)
-    except Exception:
-        st.warning("Não foi possível carregar o histórico deste ativo.")
-
-st.divider()
-st.caption("⚠️ Esta aplicação é apenas informativa e não constitui aconselhamento financeiro. "
-           "Os dados são fornecidos pelo Yahoo Finance através da biblioteca yfinance e podem ter atrasos.")
+                 delta="-" + formata_pct(linha["dist_do_
