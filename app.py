@@ -536,7 +536,7 @@ with tab_reforco:
             """, unsafe_allow_html=True)
 
 # ---------------- TAB DETALHE ----------------
-with with tab_detalhe:
+with tab_detalhe:
     ticker_escolhido = st.selectbox(
         "Escolhe um ativo", options=df["ticker"],
         format_func=lambda tk: f"{tk} — {df[df['ticker']==tk]['nome'].values[0]}",
