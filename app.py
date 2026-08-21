@@ -263,7 +263,7 @@ with tab_resumo:
         cor = "#00c853" if v >= 0 else "#ff5252"
         return f"color: {cor}; font-weight: 600;"
 
-    styled = tabela_view.style.applymap(cor_variacao, subset=["Var. Dia"])
+    styled = tabela_view.style.map(cor_variacao, subset=["Var. Dia"])
     st.dataframe(styled, use_container_width=True, height=600, hide_index=True)
 
 # ---------------- TAB ALERTAS ----------------
