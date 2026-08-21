@@ -536,7 +536,7 @@ with tab_reforco:
             """, unsafe_allow_html=True)
 
 # ---------------- TAB DETALHE ----------------
-with tab_detalhe:
+with with tab_detalhe:
     ticker_escolhido = st.selectbox(
         "Escolhe um ativo", options=df["ticker"],
         format_func=lambda tk: f"{tk} — {df[df['ticker']==tk]['nome'].values[0]}",
@@ -554,4 +554,43 @@ with tab_detalhe:
     col_e.metric("Mínimo 52 semanas", f"{linha['low_52']:.2f}" if pd.notna(linha["low_52"]) else "N/D",
                  delta=formata_pct(linha["dist_do_minimo"]) + " acima do mínimo")
     col_f.metric("Máximo 52 semanas", f"{linha['high_52']:.2f}" if pd.notna(linha["high_52"]) else "N/D",
-                 delta="-" + formata_pct(linha["dist_do_
+                 delta="-" + formata_pct(linha["dist_do_maximo"]) + " abaixo do máximo")
+
+    st.divider()
+    st.subheader("Factor Grades & Quant Rating")
+    cores_nota = {"A": "#00c853", "B": "#7cd992", "C": "#ffb300", "D": "#ff5252"}
+    cores_rating = {"Strong Buy": "#00c853", "Buy": "#7cd992", "Hold": "#ffb300"}
+    cor_r = cores_rating.get(linha["quant_rating"], "#888")
+    st.markdown(f"""
+    <div class="metric-card">
+        <span style="color:{cor_r}; font-weight:700; font-size:18px;">{linha['quant_rating']}</span><br><br>
+        Valuation: <span style="color:{cores_nota.get(linha['grade_valuation'])}; font-weight:700;">{linha['grade_valuation']}</span> &nbsp;&nbsp;
+        Growth: <span style="color:{cores_nota.get(linha['grade_growth'])}; font-weight:700;">{linha['grade_growth']}</span> &nbsp;&nbsp;
+        Profitability: <span style="color:{cores_nota.get(linha['grade_profitability'])}; font-weight:700;">{linha['grade_profitability']}</span>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.divider()
+    st.subheader(f"Histórico de Preço — {ticker_escolhido} (1 ano)")
+    try:
+        hist = yf.Ticker(ticker_escolhido).history(period="1y")
+        fig_line = go.Figure()
+        fig_line.add_trace(go.Scatter(
+            x=hist.index, y=hist["Close"], mode="lines",
+            line=dict(color="#00c853", width=2), fill="tozeroy",
+            fillcolor="rgba(0,200,83,0.08)",
+        ))
+        fig_line.update_layout(
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            font_color="white",
+            margin=dict(l=10, r=10, t=10, b=10),
+            xaxis_title="", yaxis_title="Preço",
+        )
+        st.plotly_chart(fig_line, use_container_width=True)
+    except Exception:
+        st.warning("Não foi possível carregar o histórico deste ativo.")
+
+st.divider()
+st.caption("⚠️ Esta aplicação é apenas informativa e não constitui aconselhamento financeiro. "
+           "Os dados são fornecidos pelo Yahoo Finance através da biblioteca yfinance e podem ter atrasos.")
