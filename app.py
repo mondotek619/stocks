@@ -93,6 +93,63 @@ PORTFOLIO = [
 TICKERS = [a["ticker"] for a in PORTFOLIO]
 
 # ------------------------------------------------------------------
+# BANDAS DE REFERÊNCIA POR SETOR
+# ------------------------------------------------------------------
+# Critério usado por casas de research (ex: Morningstar, Seeking Alpha Quant):
+# comparar cada rácio com a média típica do PRÓPRIO setor, não com um valor fixo
+# igual para toda a carteira — um P/E de 25 é caro para um banco mas barato
+# para uma tech. Cada lista [c0, c1, c2] define os cortes ascendentes usados
+# em _pontos_metrica (ver função abaixo). Valores indicativos, baseados em
+# médias históricas de mercado por setor — não substituem research atualizado.
+SECTOR_BENCHMARKS = {
+    "Tecnologia": {
+        "pe": [20, 30, 40], "pb": [4, 8, 12],
+        "growth": [5, 12, 20], "roe": [15, 22, 30], "margin": [12, 20, 28],
+    },
+    "Financeiro": {
+        "pe": [9, 12, 16], "pb": [1.0, 1.8, 2.5],
+        "growth": [2, 6, 10], "roe": [8, 12, 16], "margin": [15, 22, 30],
+    },
+    "Financeiro (Seguros)": {
+        "pe": [8, 11, 14], "pb": [0.9, 1.5, 2.2],
+        "growth": [2, 5, 9], "roe": [7, 11, 15], "margin": [8, 14, 20],
+    },
+    "Consumo Discricionário": {
+        "pe": [15, 22, 30], "pb": [2.5, 4.5, 7],
+        "growth": [3, 8, 14], "roe": [10, 16, 24], "margin": [4, 8, 14],
+    },
+    "Consumo Básico": {
+        "pe": [16, 21, 26], "pb": [3, 6, 9],
+        "growth": [0, 4, 8], "roe": [15, 22, 30], "margin": [6, 11, 16],
+    },
+    "Imobiliário (REIT)": {
+        "pe": [14, 19, 25], "pb": [1.2, 1.8, 2.5],
+        "growth": [-2, 3, 7], "roe": [4, 7, 11], "margin": [15, 25, 35],
+    },
+    "Industrial": {
+        "pe": [14, 19, 24], "pb": [2.5, 4.5, 7],
+        "growth": [0, 6, 12], "roe": [10, 16, 22], "margin": [5, 10, 15],
+    },
+    "Saúde": {
+        "pe": [14, 20, 27], "pb": [3, 5.5, 8],
+        "growth": [2, 8, 15], "roe": [10, 16, 24], "margin": [6, 12, 18],
+    },
+    "Energia/Materiais": {
+        "pe": [7, 11, 16], "pb": [1.2, 2.2, 3.5],
+        "growth": [-5, 3, 10], "roe": [5, 10, 16], "margin": [5, 12, 20],
+    },
+    "Utilities": {
+        "pe": [14, 18, 23], "pb": [1.5, 2.2, 3],
+        "growth": [-1, 2, 5], "roe": [7, 10, 14], "margin": [6, 10, 15],
+    },
+    # Aplicado quando o setor não está mapeado acima
+    "_default": {
+        "pe": [15, 20, 30], "pb": [2, 4, 6],
+        "growth": [0, 8, 15], "roe": [5, 12, 20], "margin": [5, 12, 20],
+    },
+}
+
+# ------------------------------------------------------------------
 # FUNÇÕES DE APOIO
 # ------------------------------------------------------------------
 
@@ -155,6 +212,7 @@ def obter_dados(ticker):
         earnings_growth = info.get("earningsGrowth", np.nan)  # fração
         roe = info.get("returnOnEquity", np.nan)              # fração
         profit_margin = info.get("profitMargins", np.nan)     # fração
+        peg_ratio = info.get("trailingPegRatio") or info.get("pegRatio", np.nan)
 
         return {
             "nome_completo": nome_completo,
@@ -173,6 +231,7 @@ def obter_dados(ticker):
             "earnings_growth": earnings_growth,
             "roe": roe,
             "profit_margin": profit_margin,
+            "peg_ratio": peg_ratio,
         }
     except Exception as e:
         return {"erro": str(e)}
@@ -194,6 +253,7 @@ def carregar_carteira():
                 "dist_do_maximo": np.nan, "moeda": "",
                 "price_to_book": np.nan, "revenue_growth": np.nan,
                 "earnings_growth": np.nan, "roe": np.nan, "profit_margin": np.nan,
+                "peg_ratio": np.nan,
             })
         linhas.append(linha)
     return pd.DataFrame(linhas)
@@ -239,27 +299,36 @@ def _nota_de_score(score):
 
 
 def calcular_factor_grades(row):
-    """Calcula as notas de Valuation, Growth e Profitability e o Quant Rating de uma linha."""
-    # Valuation: P/E e P/B mais baixos = melhor
-    score_valuation = np.mean([
-        _pontos_metrica(row.get("pe_ratio"), [15, 20, 30], maior_melhor=False),
-        _pontos_metrica(row.get("price_to_book"), [2, 4, 6], maior_melhor=False),
-    ])
+    """Calcula as notas de Valuation, Growth e Profitability e o Quant Rating de uma linha,
+    usando bandas de referência específicas do setor do ativo (critério profissional:
+    o mesmo P/E significa coisas diferentes em setores diferentes)."""
+    bandas = SECTOR_BENCHMARKS.get(row.get("setor"), SECTOR_BENCHMARKS["_default"])
 
-    # Growth: crescimento de receita e de resultados mais alto = melhor (valores em %)
+    # ---- Valuation: P/E, P/B (mais baixos = melhor) + PEG (crescimento já embutido) ----
+    componentes_valuation = [
+        _pontos_metrica(row.get("pe_ratio"), bandas["pe"], maior_melhor=False),
+        _pontos_metrica(row.get("price_to_book"), bandas["pb"], maior_melhor=False),
+    ]
+    peg = row.get("peg_ratio")
+    if pd.notna(peg) and peg > 0:
+        # PEG < 1 é considerado subvalorizado face ao crescimento; regra transversal a setores
+        componentes_valuation.append(_pontos_metrica(peg, [1, 2, 3], maior_melhor=False))
+    score_valuation = np.mean(componentes_valuation)
+
+    # ---- Growth: crescimento de receita e de resultados (valores em %), vs. banda do setor ----
     receita_pct = row.get("revenue_growth") * 100 if pd.notna(row.get("revenue_growth")) else np.nan
     resultados_pct = row.get("earnings_growth") * 100 if pd.notna(row.get("earnings_growth")) else np.nan
     score_growth = np.mean([
-        _pontos_metrica(receita_pct, [0, 8, 15], maior_melhor=True),
-        _pontos_metrica(resultados_pct, [0, 8, 15], maior_melhor=True),
+        _pontos_metrica(receita_pct, bandas["growth"], maior_melhor=True),
+        _pontos_metrica(resultados_pct, bandas["growth"], maior_melhor=True),
     ])
 
-    # Profitability: ROE e margem líquida mais altos = melhor (valores em %)
+    # ---- Profitability: ROE e margem líquida (valores em %), vs. banda do setor ----
     roe_pct = row.get("roe") * 100 if pd.notna(row.get("roe")) else np.nan
     margem_pct = row.get("profit_margin") * 100 if pd.notna(row.get("profit_margin")) else np.nan
     score_profitability = np.mean([
-        _pontos_metrica(roe_pct, [5, 12, 20], maior_melhor=True),
-        _pontos_metrica(margem_pct, [5, 12, 20], maior_melhor=True),
+        _pontos_metrica(roe_pct, bandas["roe"], maior_melhor=True),
+        _pontos_metrica(margem_pct, bandas["margin"], maior_melhor=True),
     ])
 
     score_quant = np.mean([score_valuation, score_growth, score_profitability])
@@ -454,9 +523,12 @@ with tab_alocacao:
 with tab_ratings:
     st.subheader("Factor Grades & Quant Rating")
     st.caption(
-        "Notas de A (melhor) a D (pior) calculadas a partir de rácios do yfinance: "
-        "Valuation (P/E, P/B), Growth (crescimento de receita/resultados) e "
-        "Profitability (ROE, margem líquida). O Quant Rating combina as três notas."
+        "Notas de A (melhor) a D (pior), calculadas **em relação à média típica do setor "
+        "de cada ativo** — critério usado por casas de research profissionais, já que um "
+        "P/E de 25 é caro para um banco mas normal para uma tech. "
+        "Valuation considera P/E, P/B e PEG; Growth considera crescimento de receita e "
+        "resultados; Profitability considera ROE e margem líquida. "
+        "O Quant Rating combina as três notas."
     )
 
     cores_nota = {"A": "#00c853", "B": "#7cd992", "C": "#ffb300", "D": "#ff5252"}
@@ -494,3 +566,106 @@ with tab_reforco:
     )
     reforco["score_oportunidade"] = reforco["score_quant"] + reforco["bonus_minimo"]
     reforco = reforco.sort_values("score_oportunidade", ascending=False)
+
+    tabela_reforco = pd.DataFrame({
+        "Ticker": reforco["ticker"],
+        "Nome": reforco["nome"],
+        "Rating": reforco["quant_rating"],
+        "Valuation": reforco["grade_valuation"],
+        "Growth": reforco["grade_growth"],
+        "Profitability": reforco["grade_profitability"],
+        "Preço": reforco.apply(lambda r: f"{r['preco']:.2f} {r['moeda']}" if pd.notna(r["preco"]) else "N/D", axis=1),
+        "Dist. Mín 52s": reforco["dist_do_minimo"].map(formata_pct),
+        "Peso Atual": reforco["peso"].map(lambda x: f"{x}%"),
+    })
+
+    def cor_rating_reforco(val):
+        cores = {"Strong Buy": "#00c853", "Buy": "#7cd992", "Hold": "#ffb300"}
+        cor = cores.get(val, "")
+        return f"color: {cor}; font-weight: 600;" if cor else ""
+
+    def cor_nota_reforco(val):
+        cores = {"A": "#00c853", "B": "#7cd992", "C": "#ffb300", "D": "#ff5252"}
+        cor = cores.get(val, "")
+        return f"color: {cor}; font-weight: 600;" if cor else ""
+
+    styled_reforco = (
+        tabela_reforco.style
+        .map(cor_rating_reforco, subset=["Rating"])
+        .map(cor_nota_reforco, subset=["Valuation", "Growth", "Profitability"])
+    )
+    st.dataframe(styled_reforco, use_container_width=True, height=600, hide_index=True)
+
+    top3 = reforco.head(3)
+    if not top3.empty:
+        st.divider()
+        st.markdown("**🥇 Top 3 para reforçar agora**")
+        for _, r in top3.iterrows():
+            st.markdown(f"""
+            <div class="alert-card-green">
+                <b>{r['ticker']} — {r['nome']}</b> ({r['quant_rating']})<br>
+                Valuation {r['grade_valuation']} · Growth {r['grade_growth']} · Profitability {r['grade_profitability']}
+                {' · a ' + formata_pct(r['dist_do_minimo']) + ' do mínimo de 52 semanas' if pd.notna(r['dist_do_minimo']) and r['dist_do_minimo'] <= 20 else ''}
+            </div>
+            """, unsafe_allow_html=True)
+
+# ---------------- TAB DETALHE ----------------
+with tab_detalhe:
+    ticker_escolhido = st.selectbox(
+        "Escolhe um ativo", options=df["ticker"],
+        format_func=lambda tk: f"{tk} — {df[df['ticker']==tk]['nome'].values[0]}",
+    )
+    linha = df[df["ticker"] == ticker_escolhido].iloc[0]
+
+    col_a, col_b, col_c, col_d = st.columns(4)
+    col_a.metric("Preço", f"{linha['preco']:.2f} {linha['moeda']}" if pd.notna(linha['preco']) else "N/D",
+                 delta=formata_pct(linha["variacao_pct"]))
+    col_b.metric("P/E Ratio", f"{linha['pe_ratio']:.1f}" if pd.notna(linha["pe_ratio"]) else "N/D")
+    col_c.metric("Dividend Yield", formata_pct(linha["dividend_yield"]))
+    col_d.metric("Cap. Bolsista", formata_grande(linha["market_cap"]))
+
+    col_e, col_f = st.columns(2)
+    col_e.metric("Mínimo 52 semanas", f"{linha['low_52']:.2f}" if pd.notna(linha["low_52"]) else "N/D",
+                 delta=formata_pct(linha["dist_do_minimo"]) + " acima do mínimo")
+    col_f.metric("Máximo 52 semanas", f"{linha['high_52']:.2f}" if pd.notna(linha["high_52"]) else "N/D",
+                 delta="-" + formata_pct(linha["dist_do_maximo"]) + " abaixo do máximo")
+
+    st.divider()
+    st.subheader("Factor Grades & Quant Rating")
+    cores_nota = {"A": "#00c853", "B": "#7cd992", "C": "#ffb300", "D": "#ff5252"}
+    cores_rating = {"Strong Buy": "#00c853", "Buy": "#7cd992", "Hold": "#ffb300"}
+    cor_r = cores_rating.get(linha["quant_rating"], "#888")
+    st.markdown(f"""
+    <div class="metric-card">
+        <span style="color:{cor_r}; font-weight:700; font-size:18px;">{linha['quant_rating']}</span><br><br>
+        Valuation: <span style="color:{cores_nota.get(linha['grade_valuation'])}; font-weight:700;">{linha['grade_valuation']}</span> &nbsp;&nbsp;
+        Growth: <span style="color:{cores_nota.get(linha['grade_growth'])}; font-weight:700;">{linha['grade_growth']}</span> &nbsp;&nbsp;
+        Profitability: <span style="color:{cores_nota.get(linha['grade_profitability'])}; font-weight:700;">{linha['grade_profitability']}</span>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.divider()
+    st.subheader(f"Histórico de Preço — {ticker_escolhido} (1 ano)")
+    try:
+        hist = yf.Ticker(ticker_escolhido).history(period="1y")
+        fig_line = go.Figure()
+        fig_line.add_trace(go.Scatter(
+            x=hist.index, y=hist["Close"], mode="lines",
+            line=dict(color="#00c853", width=2), fill="tozeroy",
+            fillcolor="rgba(0,200,83,0.08)",
+        ))
+        fig_line.update_layout(
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            font_color="white",
+            margin=dict(l=10, r=10, t=10, b=10),
+            xaxis_title="", yaxis_title="Preço",
+        )
+        st.plotly_chart(fig_line, use_container_width=True)
+    except Exception:
+        st.warning("Não foi possível carregar o histórico deste ativo.")
+
+st.divider()
+st.caption("⚠️ Esta aplicação é apenas informativa e não constitui aconselhamento financeiro. "
+           "Os dados são fornecidos pelo Yahoo Finance através da biblioteca yfinance e podem ter atrasos.")
+ 
