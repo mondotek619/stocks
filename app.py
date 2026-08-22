@@ -492,4 +492,5 @@ with tab_reforco:
     reforco["bonus_minimo"] = reforco["dist_do_minimo"].apply(
         lambda x: max(0, (20 - x) / 20) if pd.notna(x) and x <= 20 else 0
     )
-    reforco["score_oportunidade"] = reforco["score_quant"] + re
+    reforco["score_oportunidade"] = reforco["score_quant"] + reforco["bonus_minimo"]
+    reforco = reforco.sort_values("score_oportunidade", ascending=False)
