@@ -70,22 +70,24 @@ st.markdown("""
 # CARTEIRA PRÉ-DEFINIDA
 # ------------------------------------------------------------------
 PORTFOLIO = [
-    {"nome": "Broadcom",         "ticker": "AVGO",    "peso": 5},
-    {"nome": "Alphabet",         "ticker": "GOOGL",   "peso": 10},
-    {"nome": "ASML Holding",     "ticker": "ASML",    "peso": 10},
-    {"nome": "JPMorgan Chase",   "ticker": "JPM",     "peso": 10},
-    {"nome": "Mastercard",       "ticker": "MA",      "peso": 7},
-    {"nome": "Walt Disney",      "ticker": "DIS",     "peso": 5},
-    {"nome": "PepsiCo",          "ticker": "PEP",     "peso": 6},
-    {"nome": "Realty Income",    "ticker": "O",       "peso": 6},
-    {"nome": "Ecolab",           "ticker": "ECL",     "peso": 6},
-    {"nome": "Zoetis",           "ticker": "ZTS",     "peso": 5},
-    {"nome": "Novo Nordisk",     "ticker": "NVO",     "peso": 5},
-    {"nome": "UnitedHealth",     "ticker": "UNH",     "peso": 5},
-    {"nome": "Munich Re",        "ticker": "MUV2.DE", "peso": 5},
-    {"nome": "Cameco Corp",      "ticker": "CCJ",     "peso": 5},
-    {"nome": "Vistra Corp",      "ticker": "VST",     "peso": 5},
-    {"nome": "Caterpillar",      "ticker": "CAT",     "peso": 5},
+    {"nome": "Broadcom",         "ticker": "AVGO",    "peso": 5,  "setor": "Tecnologia"},
+    {"nome": "Alphabet",         "ticker": "GOOGL",   "peso": 10, "setor": "Tecnologia"},
+    {"nome": "ASML Holding",     "ticker": "ASML",    "peso": 10, "setor": "Tecnologia"},
+    {"nome": "JPMorgan Chase",   "ticker": "JPM",     "peso": 10, "setor": "Financeiro"},
+    {"nome": "Mastercard",       "ticker": "MA",      "peso": 7,  "setor": "Financeiro"},
+    {"nome": "Walt Disney",      "ticker": "DIS",     "peso": 5,  "setor": "Consumo Discricionário"},
+    {"nome": "PepsiCo",          "ticker": "PEP",     "peso": 6,  "setor": "Consumo Básico"},
+    {"nome": "Realty Income",    "ticker": "O",       "peso": 6,  "setor": "Imobiliário (REIT)"},
+    {"nome": "Ecolab",           "ticker": "ECL",     "peso": 6,  "setor": "Industrial"},
+    {"nome": "Zoetis",           "ticker": "ZTS",     "peso": 5,  "setor": "Saúde"},
+    {"nome": "Novo Nordisk",     "ticker": "NVO",     "peso": 5,  "setor": "Saúde"},
+    {"nome": "UnitedHealth",     "ticker": "UNH",     "peso": 5,  "setor": "Saúde"},
+    {"nome": "Munich Re",        "ticker": "MUV2.DE", "peso": 5,  "setor": "Financeiro (Seguros)"},
+    {"nome": "Cameco Corp",      "ticker": "CCJ",     "peso": 5,  "setor": "Energia/Materiais"},
+    {"nome": "Vistra Corp",      "ticker": "VST",     "peso": 5,  "setor": "Utilities"},
+    {"nome": "Caterpillar",      "ticker": "CAT",     "peso": 5,  "setor": "Industrial"},
+    {"nome": "Procter & Gamble", "ticker": "PG",      "peso": 4,  "setor": "Consumo Básico"},
+    {"nome": "Mondelez",         "ticker": "MDLZ",    "peso": 3,  "setor": "Consumo Básico"},
 ]
 
 TICKERS = [a["ticker"] for a in PORTFOLIO]
@@ -490,107 +492,4 @@ with tab_reforco:
     reforco["bonus_minimo"] = reforco["dist_do_minimo"].apply(
         lambda x: max(0, (20 - x) / 20) if pd.notna(x) and x <= 20 else 0
     )
-    reforco["score_oportunidade"] = reforco["score_quant"] + reforco["bonus_minimo"]
-    reforco = reforco.sort_values("score_oportunidade", ascending=False)
-
-    tabela_reforco = pd.DataFrame({
-        "Ticker": reforco["ticker"],
-        "Nome": reforco["nome"],
-        "Rating": reforco["quant_rating"],
-        "Valuation": reforco["grade_valuation"],
-        "Growth": reforco["grade_growth"],
-        "Profitability": reforco["grade_profitability"],
-        "Preço": reforco.apply(lambda r: f"{r['preco']:.2f} {r['moeda']}" if pd.notna(r["preco"]) else "N/D", axis=1),
-        "Dist. Mín 52s": reforco["dist_do_minimo"].map(formata_pct),
-        "Peso Atual": reforco["peso"].map(lambda x: f"{x}%"),
-    })
-
-    def cor_rating_reforco(val):
-        cores = {"Strong Buy": "#00c853", "Buy": "#7cd992", "Hold": "#ffb300"}
-        cor = cores.get(val, "")
-        return f"color: {cor}; font-weight: 600;" if cor else ""
-
-    def cor_nota_reforco(val):
-        cores = {"A": "#00c853", "B": "#7cd992", "C": "#ffb300", "D": "#ff5252"}
-        cor = cores.get(val, "")
-        return f"color: {cor}; font-weight: 600;" if cor else ""
-
-    styled_reforco = (
-        tabela_reforco.style
-        .map(cor_rating_reforco, subset=["Rating"])
-        .map(cor_nota_reforco, subset=["Valuation", "Growth", "Profitability"])
-    )
-    st.dataframe(styled_reforco, use_container_width=True, height=600, hide_index=True)
-
-    top3 = reforco.head(3)
-    if not top3.empty:
-        st.divider()
-        st.markdown("**🥇 Top 3 para reforçar agora**")
-        for _, r in top3.iterrows():
-            st.markdown(f"""
-            <div class="alert-card-green">
-                <b>{r['ticker']} — {r['nome']}</b> ({r['quant_rating']})<br>
-                Valuation {r['grade_valuation']} · Growth {r['grade_growth']} · Profitability {r['grade_profitability']}
-                {' · a ' + formata_pct(r['dist_do_minimo']) + ' do mínimo de 52 semanas' if pd.notna(r['dist_do_minimo']) and r['dist_do_minimo'] <= 20 else ''}
-            </div>
-            """, unsafe_allow_html=True)
-
-# ---------------- TAB DETALHE ----------------
-with tab_detalhe:
-    ticker_escolhido = st.selectbox(
-        "Escolhe um ativo", options=df["ticker"],
-        format_func=lambda tk: f"{tk} — {df[df['ticker']==tk]['nome'].values[0]}",
-    )
-    linha = df[df["ticker"] == ticker_escolhido].iloc[0]
-
-    col_a, col_b, col_c, col_d = st.columns(4)
-    col_a.metric("Preço", f"{linha['preco']:.2f} {linha['moeda']}" if pd.notna(linha['preco']) else "N/D",
-                 delta=formata_pct(linha["variacao_pct"]))
-    col_b.metric("P/E Ratio", f"{linha['pe_ratio']:.1f}" if pd.notna(linha["pe_ratio"]) else "N/D")
-    col_c.metric("Dividend Yield", formata_pct(linha["dividend_yield"]))
-    col_d.metric("Cap. Bolsista", formata_grande(linha["market_cap"]))
-
-    col_e, col_f = st.columns(2)
-    col_e.metric("Mínimo 52 semanas", f"{linha['low_52']:.2f}" if pd.notna(linha["low_52"]) else "N/D",
-                 delta=formata_pct(linha["dist_do_minimo"]) + " acima do mínimo")
-    col_f.metric("Máximo 52 semanas", f"{linha['high_52']:.2f}" if pd.notna(linha["high_52"]) else "N/D",
-                 delta="-" + formata_pct(linha["dist_do_maximo"]) + " abaixo do máximo")
-
-    st.divider()
-    st.subheader("Factor Grades & Quant Rating")
-    cores_nota = {"A": "#00c853", "B": "#7cd992", "C": "#ffb300", "D": "#ff5252"}
-    cores_rating = {"Strong Buy": "#00c853", "Buy": "#7cd992", "Hold": "#ffb300"}
-    cor_r = cores_rating.get(linha["quant_rating"], "#888")
-    st.markdown(f"""
-    <div class="metric-card">
-        <span style="color:{cor_r}; font-weight:700; font-size:18px;">{linha['quant_rating']}</span><br><br>
-        Valuation: <span style="color:{cores_nota.get(linha['grade_valuation'])}; font-weight:700;">{linha['grade_valuation']}</span> &nbsp;&nbsp;
-        Growth: <span style="color:{cores_nota.get(linha['grade_growth'])}; font-weight:700;">{linha['grade_growth']}</span> &nbsp;&nbsp;
-        Profitability: <span style="color:{cores_nota.get(linha['grade_profitability'])}; font-weight:700;">{linha['grade_profitability']}</span>
-    </div>
-    """, unsafe_allow_html=True)
-
-    st.divider()
-    st.subheader(f"Histórico de Preço — {ticker_escolhido} (1 ano)")
-    try:
-        hist = yf.Ticker(ticker_escolhido).history(period="1y")
-        fig_line = go.Figure()
-        fig_line.add_trace(go.Scatter(
-            x=hist.index, y=hist["Close"], mode="lines",
-            line=dict(color="#00c853", width=2), fill="tozeroy",
-            fillcolor="rgba(0,200,83,0.08)",
-        ))
-        fig_line.update_layout(
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)",
-            font_color="white",
-            margin=dict(l=10, r=10, t=10, b=10),
-            xaxis_title="", yaxis_title="Preço",
-        )
-        st.plotly_chart(fig_line, use_container_width=True)
-    except Exception:
-        st.warning("Não foi possível carregar o histórico deste ativo.")
-
-st.divider()
-st.caption("⚠️ Esta aplicação é apenas informativa e não constitui aconselhamento financeiro. "
-           "Os dados são fornecidos pelo Yahoo Finance através da biblioteca yfinance e podem ter atrasos.")
+    reforco["score_oportunidade"] = reforco["score_quant"] + re
