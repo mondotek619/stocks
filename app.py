@@ -105,47 +105,62 @@ SECTOR_BENCHMARKS = {
     "Tecnologia": {
         "pe": [20, 30, 40], "pb": [4, 8, 12],
         "growth": [5, 12, 20], "roe": [15, 22, 30], "margin": [12, 20, 28],
+        "payout": [30, 50, 70], "debt": [30, 70, 120],
     },
     "Financeiro": {
         "pe": [9, 12, 16], "pb": [1.0, 1.8, 2.5],
         "growth": [2, 6, 10], "roe": [8, 12, 16], "margin": [15, 22, 30],
+        "payout": [40, 60, 80], "debt": [300, 500, 700],
     },
     "Financeiro (Seguros)": {
         "pe": [8, 11, 14], "pb": [0.9, 1.5, 2.2],
         "growth": [2, 5, 9], "roe": [7, 11, 15], "margin": [8, 14, 20],
+        "payout": [40, 60, 80], "debt": [300, 500, 700],
     },
     "Consumo Discricionário": {
         "pe": [15, 22, 30], "pb": [2.5, 4.5, 7],
         "growth": [3, 8, 14], "roe": [10, 16, 24], "margin": [4, 8, 14],
+        "payout": [30, 50, 70], "debt": [40, 80, 140],
     },
     "Consumo Básico": {
         "pe": [16, 21, 26], "pb": [3, 6, 9],
         "growth": [0, 4, 8], "roe": [15, 22, 30], "margin": [6, 11, 16],
+        "payout": [50, 65, 80], "debt": [50, 90, 150],
     },
     "Imobiliário (REIT)": {
         "pe": [14, 19, 25], "pb": [1.2, 1.8, 2.5],
         "growth": [-2, 3, 7], "roe": [4, 7, 11], "margin": [15, 25, 35],
+        # REITs são obrigados por lei a distribuir ~90%+ dos lucros, por isso
+        # um payout alto aqui é normal e não é sinal de perigo como noutros setores
+        "payout": [75, 90, 100], "debt": [80, 150, 220],
     },
     "Industrial": {
         "pe": [14, 19, 24], "pb": [2.5, 4.5, 7],
         "growth": [0, 6, 12], "roe": [10, 16, 22], "margin": [5, 10, 15],
+        "payout": [35, 55, 75], "debt": [50, 100, 160],
     },
     "Saúde": {
         "pe": [14, 20, 27], "pb": [3, 5.5, 8],
         "growth": [2, 8, 15], "roe": [10, 16, 24], "margin": [6, 12, 18],
+        "payout": [35, 55, 75], "debt": [40, 80, 130],
     },
     "Energia/Materiais": {
         "pe": [7, 11, 16], "pb": [1.2, 2.2, 3.5],
         "growth": [-5, 3, 10], "roe": [5, 10, 16], "margin": [5, 12, 20],
+        "payout": [30, 50, 70], "debt": [40, 80, 140],
     },
     "Utilities": {
         "pe": [14, 18, 23], "pb": [1.5, 2.2, 3],
         "growth": [-1, 2, 5], "roe": [7, 10, 14], "margin": [6, 10, 15],
+        # Utilities financiam-se estruturalmente com mais dívida (negócio regulado
+        # e previsível), por isso as bandas são mais permissivas que a média
+        "payout": [55, 70, 85], "debt": [90, 150, 220],
     },
     # Aplicado quando o setor não está mapeado acima
     "_default": {
         "pe": [15, 20, 30], "pb": [2, 4, 6],
         "growth": [0, 8, 15], "roe": [5, 12, 20], "margin": [5, 12, 20],
+        "payout": [40, 60, 80], "debt": [50, 100, 160],
     },
 }
 
@@ -179,12 +194,15 @@ def obter_dados(ticker):
         t = yf.Ticker(ticker)
         info = t.info
 
-        hist = t.history(period="1y")
-        if hist.empty:
+        # Pede 5 anos de histórico de uma vez só (serve para o preço, para o
+        # mínimo/máximo de 52 semanas E para calcular o yield médio histórico)
+        hist_5y = t.history(period="5y")
+        if hist_5y.empty:
             return None
+        hist_1y = hist_5y[hist_5y.index >= (hist_5y.index.max() - pd.Timedelta(days=365))]
 
-        preco_atual = info.get("currentPrice") or info.get("regularMarketPrice") or hist["Close"].iloc[-1]
-        fecho_anterior = info.get("previousClose") or (hist["Close"].iloc[-2] if len(hist) > 1 else preco_atual)
+        preco_atual = info.get("currentPrice") or info.get("regularMarketPrice") or hist_1y["Close"].iloc[-1]
+        fecho_anterior = info.get("previousClose") or (hist_1y["Close"].iloc[-2] if len(hist_1y) > 1 else preco_atual)
         variacao_pct = ((preco_atual - fecho_anterior) / fecho_anterior) * 100 if fecho_anterior else np.nan
 
         pe_ratio = info.get("trailingPE", np.nan)
@@ -198,8 +216,8 @@ def obter_dados(ticker):
 
         market_cap = info.get("marketCap", np.nan)
 
-        low_52 = info.get("fiftyTwoWeekLow", hist["Low"].min())
-        high_52 = info.get("fiftyTwoWeekHigh", hist["High"].max())
+        low_52 = info.get("fiftyTwoWeekLow", hist_1y["Low"].min())
+        high_52 = info.get("fiftyTwoWeekHigh", hist_1y["High"].max())
 
         dist_do_minimo = ((preco_atual - low_52) / low_52) * 100 if low_52 else np.nan
         dist_do_maximo = ((high_52 - preco_atual) / high_52) * 100 if high_52 else np.nan
@@ -213,6 +231,13 @@ def obter_dados(ticker):
         roe = info.get("returnOnEquity", np.nan)              # fração
         profit_margin = info.get("profitMargins", np.nan)     # fração
         peg_ratio = info.get("trailingPegRatio") or info.get("pegRatio", np.nan)
+
+        # ---- rácios extra para o Dividend Safety Score ----
+        payout_raw = info.get("payoutRatio", np.nan)
+        payout_ratio = payout_raw * 100 if pd.notna(payout_raw) else np.nan  # fração -> %
+        debt_to_equity = info.get("debtToEquity", np.nan)  # já vem como % (ex: 120 = D/E de 1,2x)
+
+        anos_consecutivos, dividend_cagr_5y, yield_medio_5anos = calcular_metricas_dividendo(t, hist_5y)
 
         return {
             "nome_completo": nome_completo,
@@ -232,9 +257,74 @@ def obter_dados(ticker):
             "roe": roe,
             "profit_margin": profit_margin,
             "peg_ratio": peg_ratio,
+            "payout_ratio": payout_ratio,
+            "debt_to_equity": debt_to_equity,
+            "anos_consecutivos_crescimento": anos_consecutivos,
+            "dividend_cagr_5y": dividend_cagr_5y,
+            "yield_medio_5anos": yield_medio_5anos,
         }
     except Exception as e:
         return {"erro": str(e)}
+
+
+def calcular_metricas_dividendo(t, hist_5y):
+    """Calcula, a partir do histórico de pagamentos de dividendos:
+    - anos consecutivos de aumento do dividendo anual
+    - CAGR (taxa de crescimento anual composta) do dividendo nos últimos ~5 anos
+    - yield médio dos últimos 5 anos (dividendo anual / preço médio desse ano)
+    Devolve (np.nan, np.nan, np.nan) se a empresa não pagar dividendos ou os dados forem insuficientes."""
+    try:
+        divs = t.dividends
+        if divs is None or divs.empty:
+            return np.nan, np.nan, np.nan
+
+        if divs.index.tz is not None:
+            divs = divs.copy()
+            divs.index = divs.index.tz_localize(None)
+
+        dividendos_anuais = divs.resample("YE").sum()
+        dividendos_anuais = dividendos_anuais[dividendos_anuais > 0]
+
+        # Ignora o ano corrente se ainda estiver incompleto (menos de 6 meses decorridos),
+        # para não comparar um ano parcial com anos completos
+        agora = pd.Timestamp.now()
+        if not dividendos_anuais.empty and dividendos_anuais.index[-1].year == agora.year and agora.month < 7:
+            dividendos_anuais = dividendos_anuais.iloc[:-1]
+
+        if dividendos_anuais.empty:
+            return np.nan, np.nan, np.nan
+
+        valores = dividendos_anuais.values
+
+        # ---- anos consecutivos de aumento (a contar do mais recente para trás) ----
+        anos_consecutivos = 0
+        for i in range(len(valores) - 1, 0, -1):
+            if valores[i] >= valores[i - 1] * 0.999:  # pequena tolerância a arredondamentos
+                anos_consecutivos += 1
+            else:
+                break
+
+        # ---- CAGR do dividendo (usa até 5 anos completos de histórico) ----
+        dividend_cagr_5y = np.nan
+        if len(valores) >= 6:
+            inicial, final, n_anos = valores[-6], valores[-1], 5
+        elif len(valores) >= 2:
+            inicial, final, n_anos = valores[0], valores[-1], len(valores) - 1
+        else:
+            inicial = final = n_anos = None
+
+        if inicial and n_anos and inicial > 0:
+            dividend_cagr_5y = (final / inicial) ** (1 / n_anos) - 1
+
+        # ---- yield médio dos últimos 5 anos (dividendo anual / preço médio do ano) ----
+        precos_anuais = hist_5y["Close"].resample("YE").mean()
+        precos_anuais.index = precos_anuais.index.tz_localize(None) if precos_anuais.index.tz else precos_anuais.index
+        yields_anuais = (dividendos_anuais / precos_anuais).dropna()
+        yield_medio_5anos = yields_anuais.mean() * 100 if not yields_anuais.empty else np.nan
+
+        return anos_consecutivos, dividend_cagr_5y, yield_medio_5anos
+    except Exception:
+        return np.nan, np.nan, np.nan
 
 
 @st.cache_data(ttl=300, show_spinner=False)
@@ -253,7 +343,9 @@ def carregar_carteira():
                 "dist_do_maximo": np.nan, "moeda": "",
                 "price_to_book": np.nan, "revenue_growth": np.nan,
                 "earnings_growth": np.nan, "roe": np.nan, "profit_margin": np.nan,
-                "peg_ratio": np.nan,
+                "peg_ratio": np.nan, "payout_ratio": np.nan, "debt_to_equity": np.nan,
+                "anos_consecutivos_crescimento": np.nan, "dividend_cagr_5y": np.nan,
+                "yield_medio_5anos": np.nan,
             })
         linhas.append(linha)
     return pd.DataFrame(linhas)
@@ -355,6 +447,45 @@ def aplicar_factor_grades(df):
 
 
 # ------------------------------------------------------------------
+# DIVIDEND SAFETY SCORE (A-D)
+# ------------------------------------------------------------------
+# Este é o indicador mais importante para uma estratégia de dividend growth:
+# não basta o dividendo ser alto, tem de ser SUSTENTÁVEL. Combina 4 sinais:
+#   1) Payout Ratio    -> quanto do lucro é distribuído (vs. banda do setor)
+#   2) Debt/Equity      -> quanta dívida a empresa tem (vs. banda do setor)
+#   3) Anos consecutivos de aumento do dividendo -> histórico de disciplina
+#   4) CAGR do dividendo a 5 anos -> ritmo real de crescimento do dividendo
+
+def calcular_dividend_safety(row):
+    bandas = SECTOR_BENCHMARKS.get(row.get("setor"), SECTOR_BENCHMARKS["_default"])
+
+    componentes = [
+        _pontos_metrica(row.get("payout_ratio"), bandas["payout"], maior_melhor=False),
+        _pontos_metrica(row.get("debt_to_equity"), bandas["debt"], maior_melhor=False),
+        _pontos_metrica(row.get("anos_consecutivos_crescimento"), [3, 6, 11], maior_melhor=True),
+    ]
+    cagr = row.get("dividend_cagr_5y")
+    cagr_pct = cagr * 100 if pd.notna(cagr) else np.nan
+    componentes.append(_pontos_metrica(cagr_pct, [0, 3, 7], maior_melhor=True))
+
+    score = np.mean(componentes)
+    nota = _nota_de_score(score)
+    rotulo = {"A": "Muito Seguro", "B": "Saudável", "C": "Moderado", "D": "Atenção"}[nota]
+
+    return pd.Series({
+        "score_dividend_safety": score,
+        "grade_dividend_safety": nota,
+        "dividend_safety_label": rotulo,
+    })
+
+
+def aplicar_dividend_safety(df):
+    """Adiciona as colunas do Dividend Safety Score ao DataFrame da carteira."""
+    notas = df.apply(calcular_dividend_safety, axis=1)
+    return pd.concat([df, notas], axis=1)
+
+
+# ------------------------------------------------------------------
 # SIDEBAR
 # ------------------------------------------------------------------
 with st.sidebar:
@@ -374,12 +505,39 @@ with st.sidebar:
     limite_minimo = st.slider("Perto do mínimo de 52 semanas (%)", 1, 30, 10)
     limite_pe = st.slider("P/E considerado atrativo (abaixo de)", 5, 40, 18)
 
+    st.divider()
+    with st.expander("📖 Glossário para iniciantes"):
+        st.markdown("""
+**P/E (Price/Earnings)** — quantos anos de lucro atual precisas para "pagar" o preço da ação. Mais baixo = normalmente mais barato, mas varia muito por setor.
+
+**P/B (Price/Book)** — preço da ação vs. o valor contabilístico da empresa. Útil para bancos e setores intensivos em ativos.
+
+**PEG Ratio** — o P/E ajustado ao crescimento (P/E ÷ crescimento). PEG < 1 costuma ser sinal de ação barata *face ao seu crescimento*.
+
+**ROE (Return on Equity)** — quão eficiente a empresa é a gerar lucro com o capital dos acionistas. Mais alto = melhor, em geral.
+
+**Margem Líquida** — que % da receita vira lucro. Mede eficiência operacional.
+
+**Payout Ratio** — % do lucro que a empresa distribui em dividendos. Baixo = sobra dinheiro para crescer e para aguentar anos maus. Exceção: REITs, que são obrigados por lei a distribuir quase tudo.
+
+**Debt/Equity** — dívida da empresa comparada com o capital próprio. Dívida alta pode obrigar a cortar dividendos em alturas difíceis.
+
+**CAGR do Dividendo (5 anos)** — a que ritmo médio o dividendo por ação tem crescido. Mostra se o crescimento é real, não só o yield atual.
+
+**Anos Consecutivos de Aumento** — há quantos anos seguidos o dividendo sobe sem cortes. Empresas com 10, 25+ anos (Dividend Aristocrats) são vistas como muito fiáveis.
+
+**Quant Rating** — nota combinada (Strong Buy / Buy / Hold) juntando Valuation + Growth + Profitability.
+
+**Dividend Safety** — nota (A-D) que diz se o dividendo atual parece sustentável a longo prazo, combinando payout, dívida e histórico de crescimento.
+        """)
+
 # ------------------------------------------------------------------
 # CARREGAR DADOS
 # ------------------------------------------------------------------
 with st.spinner("A carregar cotações..."):
     df = carregar_carteira()
     df = aplicar_factor_grades(df)
+    df = aplicar_dividend_safety(df)
 
 st.title("📊 Painel Diário da Carteira")
 
@@ -404,8 +562,9 @@ st.divider()
 # ------------------------------------------------------------------
 # TABS
 # ------------------------------------------------------------------
-tab_resumo, tab_alertas, tab_alocacao, tab_ratings, tab_reforco, tab_detalhe = st.tabs(
-    ["📋 Resumo", "🚨 Alertas", "🥧 Alocação", "🏆 Quant Ratings", "💎 Oportunidades de Reforço", "🔍 Detalhe por Ativo"]
+tab_resumo, tab_alertas, tab_alocacao, tab_ratings, tab_dividendos, tab_reforco, tab_detalhe = st.tabs(
+    ["📋 Resumo", "🚨 Alertas", "🥧 Alocação", "🏆 Quant Ratings", "💰 Dividend Safety",
+     "💎 Oportunidades de Reforço", "🔍 Detalhe por Ativo"]
 )
 
 # ---------------- TAB RESUMO ----------------
@@ -424,6 +583,7 @@ with tab_resumo:
         "Cap. Bolsista": tabela["market_cap"].map(formata_grande),
         "Dist. Mín 52s": tabela["dist_do_minimo"].map(formata_pct),
         "Rating": tabela["quant_rating"],
+        "Div. Safety": tabela["grade_dividend_safety"],
     })
 
     def cor_variacao(val):
@@ -441,7 +601,17 @@ with tab_resumo:
         cor = cores.get(val, "")
         return f"color: {cor}; font-weight: 600;" if cor else ""
 
-    styled = tabela_view.style.map(cor_variacao, subset=["Var. Dia"]).map(cor_rating, subset=["Rating"])
+    def cor_nota_letra(val):
+        cores = {"A": "#00c853", "B": "#7cd992", "C": "#ffb300", "D": "#ff5252"}
+        cor = cores.get(val, "")
+        return f"color: {cor}; font-weight: 600;" if cor else ""
+
+    styled = (
+        tabela_view.style
+        .map(cor_variacao, subset=["Var. Dia"])
+        .map(cor_rating, subset=["Rating"])
+        .map(cor_nota_letra, subset=["Div. Safety"])
+    )
     st.dataframe(styled, use_container_width=True, height=600, hide_index=True)
 
 # ---------------- TAB ALERTAS ----------------
@@ -551,6 +721,61 @@ with tab_ratings:
                 </div>
                 """, unsafe_allow_html=True)
 
+# ---------------- TAB DIVIDEND SAFETY ----------------
+with tab_dividendos:
+    st.subheader("Dividend Safety Score")
+    st.caption(
+        "Diz-te se o dividendo de cada ação parece sustentável a longo prazo — não basta "
+        "o yield ser alto, tem de haver lucro e caixa para o sustentar. Combina Payout Ratio, "
+        "Debt/Equity, anos consecutivos de aumento e o ritmo real de crescimento do dividendo."
+    )
+
+    with st.expander("❓ Como interpretar esta nota (clica para abrir)"):
+        st.markdown("""
+- **A — Muito Seguro**: payout baixo para o setor, dívida controlada, histórico longo de aumentos.
+- **B — Saudável**: fundamentos sólidos, sem sinais de alarme.
+- **C — Moderado**: pelo menos um indicador no limite (ex: payout já alto, ou dívida elevada).
+- **D — Atenção**: vários sinais de alerta em simultâneo — vale a pena investigar antes de reforçar.
+
+Nota: para REITs e Utilities, um payout mais alto é normal (faz parte do modelo de negócio) e já está refletido nas bandas usadas.
+        """)
+
+    cores_nota = {"A": "#00c853", "B": "#7cd992", "C": "#ffb300", "D": "#ff5252"}
+
+    dividendos_ordenados = df.sort_values("score_dividend_safety", ascending=False).reset_index(drop=True)
+    n_cols = 3
+    for i in range(0, len(dividendos_ordenados), n_cols):
+        cols = st.columns(n_cols)
+        for col, (_, row) in zip(cols, dividendos_ordenados.iloc[i:i + n_cols].iterrows()):
+            with col:
+                cor_n = cores_nota.get(row["grade_dividend_safety"], "#888")
+                payout_txt = formata_pct(row["payout_ratio"], 0)
+                debt_txt = f"{row['debt_to_equity']:.0f}%" if pd.notna(row["debt_to_equity"]) else "N/D"
+                anos_txt = f"{int(row['anos_consecutivos_crescimento'])} anos" if pd.notna(row["anos_consecutivos_crescimento"]) else "N/D"
+                cagr_txt = formata_pct(row["dividend_cagr_5y"] * 100, 1) if pd.notna(row["dividend_cagr_5y"]) else "N/D"
+                yield_5y_txt = formata_pct(row["yield_medio_5anos"], 2)
+
+                st.markdown(f"""
+                <div class="metric-card">
+                    <b>{row['ticker']}</b> — {row['nome']}<br>
+                    <span style="color:{cor_n}; font-weight:700; font-size:16px;">
+                        {row['grade_dividend_safety']} · {row['dividend_safety_label']}
+                    </span><br><br>
+                    Payout Ratio: <b>{payout_txt}</b><br>
+                    Debt/Equity: <b>{debt_txt}</b><br>
+                    Anos a aumentar: <b>{anos_txt}</b><br>
+                    CAGR Dividendo (5a): <b>{cagr_txt}</b><br>
+                    Yield atual vs. média 5a: <b>{formata_pct(row['dividend_yield'])}</b> vs <b>{yield_5y_txt}</b>
+                </div>
+                """, unsafe_allow_html=True)
+
+    st.divider()
+    st.caption(
+        "💡 Dica para novatos: um yield atual bem acima da média de 5 anos pode ser uma boa "
+        "oportunidade (ação descontada) — mas confirma sempre com o Payout Ratio e o Debt/Equity, "
+        "porque também pode ser sinal de que o mercado antecipa problemas."
+    )
+
 # ---------------- TAB OPORTUNIDADES DE REFORÇO ----------------
 with tab_reforco:
     st.subheader("Oportunidades de Reforço")
@@ -620,9 +845,12 @@ with tab_detalhe:
     col_a, col_b, col_c, col_d = st.columns(4)
     col_a.metric("Preço", f"{linha['preco']:.2f} {linha['moeda']}" if pd.notna(linha['preco']) else "N/D",
                  delta=formata_pct(linha["variacao_pct"]))
-    col_b.metric("P/E Ratio", f"{linha['pe_ratio']:.1f}" if pd.notna(linha["pe_ratio"]) else "N/D")
-    col_c.metric("Dividend Yield", formata_pct(linha["dividend_yield"]))
-    col_d.metric("Cap. Bolsista", formata_grande(linha["market_cap"]))
+    col_b.metric("P/E Ratio", f"{linha['pe_ratio']:.1f}" if pd.notna(linha["pe_ratio"]) else "N/D",
+                 help="Quantos anos de lucro atual 'pagam' o preço da ação. Compara-se sempre com o setor, nunca isolado.")
+    col_c.metric("Dividend Yield", formata_pct(linha["dividend_yield"]),
+                 help="Dividendo anual dividido pelo preço atual da ação.")
+    col_d.metric("Cap. Bolsista", formata_grande(linha["market_cap"]),
+                 help="Valor total de mercado da empresa (preço da ação × nº de ações).")
 
     col_e, col_f = st.columns(2)
     col_e.metric("Mínimo 52 semanas", f"{linha['low_52']:.2f}" if pd.notna(linha["low_52"]) else "N/D",
@@ -643,6 +871,34 @@ with tab_detalhe:
         Profitability: <span style="color:{cores_nota.get(linha['grade_profitability'])}; font-weight:700;">{linha['grade_profitability']}</span>
     </div>
     """, unsafe_allow_html=True)
+
+    st.divider()
+    st.subheader("💰 Dividend Safety")
+    cor_ds = cores_nota.get(linha["grade_dividend_safety"], "#888")
+    st.markdown(f"""
+    <div class="metric-card">
+        <span style="color:{cor_ds}; font-weight:700; font-size:18px;">
+            {linha['grade_dividend_safety']} · {linha['dividend_safety_label']}
+        </span>
+    </div>
+    """, unsafe_allow_html=True)
+
+    col_g, col_h, col_i, col_j = st.columns(4)
+    col_g.metric("Payout Ratio", formata_pct(linha["payout_ratio"], 0),
+                 help="% do lucro distribuído em dividendos. Mais baixo = mais 'almofada' para aguentar anos maus sem cortar o dividendo (exceto REITs/Utilities, que são naturalmente mais altos).")
+    col_h.metric("Debt/Equity", f"{linha['debt_to_equity']:.0f}%" if pd.notna(linha["debt_to_equity"]) else "N/D",
+                 help="Dívida da empresa comparada com o capital próprio. Dívida elevada pode obrigar a cortar dividendos para pagar credores primeiro.")
+    col_i.metric("Anos a Aumentar", f"{int(linha['anos_consecutivos_crescimento'])}" if pd.notna(linha["anos_consecutivos_crescimento"]) else "N/D",
+                 help="Anos consecutivos em que a empresa aumentou o dividendo, sem cortar nem congelar.")
+    col_j.metric("CAGR Dividendo (5a)", formata_pct(linha["dividend_cagr_5y"] * 100, 1) if pd.notna(linha["dividend_cagr_5y"]) else "N/D",
+                 help="Taxa média anual a que o dividendo por ação cresceu nos últimos ~5 anos.")
+
+    st.caption(
+        f"Yield atual: **{formata_pct(linha['dividend_yield'])}** · "
+        f"Yield médio dos últimos 5 anos: **{formata_pct(linha['yield_medio_5anos'])}**  \n"
+        "Se o yield atual estiver bem acima da média histórica, pode ser sinal de ação descontada — "
+        "mas confirma sempre com o Payout Ratio antes de concluir isso."
+    )
 
     st.divider()
     st.subheader(f"Histórico de Preço — {ticker_escolhido} (1 ano)")
@@ -668,4 +924,3 @@ with tab_detalhe:
 st.divider()
 st.caption("⚠️ Esta aplicação é apenas informativa e não constitui aconselhamento financeiro. "
            "Os dados são fornecidos pelo Yahoo Finance através da biblioteca yfinance e podem ter atrasos.")
- 
