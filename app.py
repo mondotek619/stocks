@@ -70,6 +70,7 @@ st.markdown("""
 # CARTEIRA PRÉ-DEFINIDA
 # ------------------------------------------------------------------
 PORTFOLIO = [
+    {"nome": "NextEra Energy",   "ticker": "NEE",     "peso": 3,  "setor": "Utilities"},
     {"nome": "Broadcom",         "ticker": "AVGO",    "peso": 5,  "setor": "Tecnologia"},
     {"nome": "Alphabet",         "ticker": "GOOGL",   "peso": 10, "setor": "Tecnologia"},
     {"nome": "ASML Holding",     "ticker": "ASML",    "peso": 10, "setor": "Tecnologia"},
