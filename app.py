@@ -70,7 +70,6 @@ st.markdown("""
 # CARTEIRA PRÉ-DEFINIDA
 # ------------------------------------------------------------------
 PORTFOLIO = [
-    {"nome": "NextEra Energy",   "ticker": "NEE",     "peso": 3,  "setor": "Utilities"},
     {"nome": "Broadcom",         "ticker": "AVGO",    "peso": 5,  "setor": "Tecnologia"},
     {"nome": "Alphabet",         "ticker": "GOOGL",   "peso": 10, "setor": "Tecnologia"},
     {"nome": "ASML Holding",     "ticker": "ASML",    "peso": 10, "setor": "Tecnologia"},
@@ -89,6 +88,8 @@ PORTFOLIO = [
     {"nome": "Caterpillar",      "ticker": "CAT",     "peso": 5,  "setor": "Industrial"},
     {"nome": "Procter & Gamble", "ticker": "PG",      "peso": 4,  "setor": "Consumo Básico"},
     {"nome": "Mondelez",         "ticker": "MDLZ",    "peso": 3,  "setor": "Consumo Básico"},
+    {"nome": "NextEra Energy",   "ticker": "NEE",     "peso": 3,  "setor": "Utilities"},
+    {"nome": "American Water Works", "ticker": "AWK", "peso": 3, "setor": "Utilities"},
 ]
 
 TICKERS = [a["ticker"] for a in PORTFOLIO]
@@ -105,63 +106,78 @@ TICKERS = [a["ticker"] for a in PORTFOLIO]
 SECTOR_BENCHMARKS = {
     "Tecnologia": {
         "pe": [20, 30, 40], "pb": [4, 8, 12],
-        "growth": [5, 12, 20], "roe": [15, 22, 30], "margin": [12, 20, 28],
+        "growth": [5, 12, 20], "roe": [15, 22, 30], "margin": [12, 20, 28], "roic": [12, 18, 26],
         "payout": [30, 50, 70], "debt": [30, 70, 120],
+        "fcf_payout": [40, 70, 100], "interest_coverage": [5, 10, 20],
     },
     "Financeiro": {
         "pe": [9, 12, 16], "pb": [1.0, 1.8, 2.5],
-        "growth": [2, 6, 10], "roe": [8, 12, 16], "margin": [15, 22, 30],
+        "growth": [2, 6, 10], "roe": [8, 12, 16], "margin": [15, 22, 30], "roic": [4, 7, 11],
         "payout": [40, 60, 80], "debt": [300, 500, 700],
+        # Bancos não têm "FCF" nem "cobertura de juros" no sentido tradicional
+        # (a dívida É o produto); bandas muito largas para não distorcer a nota
+        "fcf_payout": [50, 80, 120], "interest_coverage": [1, 2, 4],
     },
     "Financeiro (Seguros)": {
         "pe": [8, 11, 14], "pb": [0.9, 1.5, 2.2],
-        "growth": [2, 5, 9], "roe": [7, 11, 15], "margin": [8, 14, 20],
+        "growth": [2, 5, 9], "roe": [7, 11, 15], "margin": [8, 14, 20], "roic": [4, 7, 11],
         "payout": [40, 60, 80], "debt": [300, 500, 700],
+        "fcf_payout": [50, 80, 120], "interest_coverage": [1, 2, 4],
     },
     "Consumo Discricionário": {
         "pe": [15, 22, 30], "pb": [2.5, 4.5, 7],
-        "growth": [3, 8, 14], "roe": [10, 16, 24], "margin": [4, 8, 14],
+        "growth": [3, 8, 14], "roe": [10, 16, 24], "margin": [4, 8, 14], "roic": [8, 13, 20],
         "payout": [30, 50, 70], "debt": [40, 80, 140],
+        "fcf_payout": [40, 70, 100], "interest_coverage": [3, 6, 12],
     },
     "Consumo Básico": {
         "pe": [16, 21, 26], "pb": [3, 6, 9],
-        "growth": [0, 4, 8], "roe": [15, 22, 30], "margin": [6, 11, 16],
+        "growth": [0, 4, 8], "roe": [15, 22, 30], "margin": [6, 11, 16], "roic": [10, 16, 24],
         "payout": [50, 65, 80], "debt": [50, 90, 150],
+        "fcf_payout": [60, 80, 100], "interest_coverage": [4, 8, 15],
     },
     "Imobiliário (REIT)": {
         "pe": [14, 19, 25], "pb": [1.2, 1.8, 2.5],
-        "growth": [-2, 3, 7], "roe": [4, 7, 11], "margin": [15, 25, 35],
+        "growth": [-2, 3, 7], "roe": [4, 7, 11], "margin": [15, 25, 35], "roic": [3, 5, 8],
         # REITs são obrigados por lei a distribuir ~90%+ dos lucros, por isso
         # um payout alto aqui é normal e não é sinal de perigo como noutros setores
         "payout": [75, 90, 100], "debt": [80, 150, 220],
+        "fcf_payout": [90, 110, 140], "interest_coverage": [2, 3.5, 6],
     },
     "Industrial": {
         "pe": [14, 19, 24], "pb": [2.5, 4.5, 7],
-        "growth": [0, 6, 12], "roe": [10, 16, 22], "margin": [5, 10, 15],
+        "growth": [0, 6, 12], "roe": [10, 16, 22], "margin": [5, 10, 15], "roic": [7, 12, 18],
         "payout": [35, 55, 75], "debt": [50, 100, 160],
+        "fcf_payout": [45, 75, 105], "interest_coverage": [3, 6, 12],
     },
     "Saúde": {
         "pe": [14, 20, 27], "pb": [3, 5.5, 8],
-        "growth": [2, 8, 15], "roe": [10, 16, 24], "margin": [6, 12, 18],
+        "growth": [2, 8, 15], "roe": [10, 16, 24], "margin": [6, 12, 18], "roic": [7, 13, 20],
         "payout": [35, 55, 75], "debt": [40, 80, 130],
+        "fcf_payout": [45, 75, 105], "interest_coverage": [4, 8, 15],
     },
     "Energia/Materiais": {
         "pe": [7, 11, 16], "pb": [1.2, 2.2, 3.5],
-        "growth": [-5, 3, 10], "roe": [5, 10, 16], "margin": [5, 12, 20],
+        "growth": [-5, 3, 10], "roe": [5, 10, 16], "margin": [5, 12, 20], "roic": [4, 8, 13],
         "payout": [30, 50, 70], "debt": [40, 80, 140],
+        "fcf_payout": [40, 70, 100], "interest_coverage": [3, 6, 12],
     },
     "Utilities": {
         "pe": [14, 18, 23], "pb": [1.5, 2.2, 3],
-        "growth": [-1, 2, 5], "roe": [7, 10, 14], "margin": [6, 10, 15],
+        "growth": [-1, 2, 5], "roe": [7, 10, 14], "margin": [6, 10, 15], "roic": [4, 7, 11],
         # Utilities financiam-se estruturalmente com mais dívida (negócio regulado
-        # e previsível), por isso as bandas são mais permissivas que a média
+        # e previsível), por isso as bandas são mais permissivas que a média.
+        # O FCF é tipicamente pressionado por capex pesado (redes, infraestrutura),
+        # por isso um FCF Payout >100% é comum e não é, por si só, alarmante.
         "payout": [55, 70, 85], "debt": [90, 150, 220],
+        "fcf_payout": [80, 110, 150], "interest_coverage": [2, 3.5, 6],
     },
     # Aplicado quando o setor não está mapeado acima
     "_default": {
         "pe": [15, 20, 30], "pb": [2, 4, 6],
-        "growth": [0, 8, 15], "roe": [5, 12, 20], "margin": [5, 12, 20],
+        "growth": [0, 8, 15], "roe": [5, 12, 20], "margin": [5, 12, 20], "roic": [4, 9, 15],
         "payout": [40, 60, 80], "debt": [50, 100, 160],
+        "fcf_payout": [50, 80, 110], "interest_coverage": [3, 6, 12],
     },
 }
 
@@ -240,6 +256,33 @@ def obter_dados(ticker):
 
         anos_consecutivos, dividend_cagr_5y, yield_medio_5anos = calcular_metricas_dividendo(t, hist_5y)
 
+        # ---- FCF Payout Ratio: dividendos totais pagos vs. Free Cash Flow ----
+        # Mais rigoroso que o payout contabilístico, porque usa dinheiro real gerado,
+        # não o lucro (que pode ter itens não-monetários como amortizações/imparidades).
+        dividend_rate = info.get("dividendRate", np.nan)  # dividendo anual por ação, guardado
+        fcf_payout_ratio = np.nan                          # também para o Valor Intrínseco
+        try:
+            fcf = info.get("freeCashflow")
+            shares_out = info.get("sharesOutstanding")
+            if fcf and pd.notna(dividend_rate) and dividend_rate and shares_out and fcf > 0:
+                dividendos_totais = dividend_rate * shares_out
+                fcf_payout_ratio = (dividendos_totais / fcf) * 100
+        except Exception:
+            pass
+
+        # ---- Beta e Forward P/E: indicadores complementares, mostrados como informação ----
+        beta = info.get("beta", np.nan)
+        forward_pe = info.get("forwardPE", np.nan)
+
+        # ---- Interest Coverage Ratio: EBIT / Despesa com Juros ----
+        # Mede quantas vezes o lucro operacional cobre os juros da dívida.
+        # Quanto mais alto, mais folgada é a empresa para pagar a dívida sem
+        # comprometer o dividendo. Vem da demonstração de resultados anual.
+        interest_coverage = calcular_interest_coverage(t)
+
+        # ---- ROIC: retorno sobre TODO o capital investido (dívida + capital próprio) ----
+        roic = calcular_roic(t)
+
         return {
             "nome_completo": nome_completo,
             "preco": preco_atual,
@@ -263,9 +306,103 @@ def obter_dados(ticker):
             "anos_consecutivos_crescimento": anos_consecutivos,
             "dividend_cagr_5y": dividend_cagr_5y,
             "yield_medio_5anos": yield_medio_5anos,
+            "fcf_payout_ratio": fcf_payout_ratio,
+            "beta": beta,
+            "forward_pe": forward_pe,
+            "interest_coverage": interest_coverage,
+            "roic": roic,
+            "dividend_rate": dividend_rate,
         }
     except Exception as e:
         return {"erro": str(e)}
+
+
+def calcular_interest_coverage(t):
+    """Calcula o Interest Coverage Ratio (EBIT / Despesa com Juros) a partir da
+    demonstração de resultados anual. Usa 'Operating Income' como aproximação
+    ao EBIT (rubrica mais fiável e consistente no yfinance) e procura a despesa
+    de juros entre os nomes mais comuns dessa rubrica. Devolve N/D em vez de
+    rebentar sempre que a informação não estiver disponível (ex: alguns bancos)."""
+    try:
+        financials = t.financials
+        if financials is None or financials.empty:
+            return np.nan
+
+        def _primeira_linha(candidatos):
+            for nome in candidatos:
+                if nome in financials.index:
+                    valor = financials.loc[nome].iloc[0]
+                    if pd.notna(valor):
+                        return valor
+            return None
+
+        ebit = _primeira_linha(["EBIT", "Operating Income"])
+        interest_expense = _primeira_linha(
+            ["Interest Expense", "Interest Expense Non Operating", "Net Interest Income"]
+        )
+
+        if ebit is None or interest_expense in (None, 0):
+            return np.nan
+
+        return abs(ebit / interest_expense)
+    except Exception:
+        return np.nan
+
+
+def calcular_roic(t):
+    """Calcula o ROIC (Return on Invested Capital): NOPAT / Capital Investido.
+    Ao contrário do ROE (que só olha para o capital próprio e pode ser
+    'inflacionado' por dívida), o ROIC mede o retorno sobre TODO o capital
+    usado no negócio — dívida + capital próprio — dando uma imagem mais
+    fiel da qualidade real do negócio, independente de como é financiado.
+      NOPAT = Resultado Operacional × (1 - taxa de imposto efetiva)
+      Capital Investido = Dívida Total + Capital Próprio - Caixa
+    Devolve N/D sempre que faltar alguma rubrica (comum em bancos/seguradoras,
+    onde o conceito de "capital investido" tradicional não se aplica bem)."""
+    try:
+        fin = t.financials
+        bs = t.balance_sheet
+        if fin is None or fin.empty or bs is None or bs.empty:
+            return np.nan
+
+        def _primeira(df, candidatos):
+            for nome in candidatos:
+                if nome in df.index:
+                    valor = df.loc[nome].iloc[0]
+                    if pd.notna(valor):
+                        return valor
+            return None
+
+        operating_income = _primeira(fin, ["Operating Income", "EBIT"])
+        if operating_income is None:
+            return np.nan
+
+        # Taxa de imposto efetiva (com fallback para a taxa federal dos EUA, 21%)
+        pretax_income = _primeira(fin, ["Pretax Income"])
+        tax_provision = _primeira(fin, ["Tax Provision"])
+        if pretax_income and tax_provision is not None and pretax_income != 0:
+            taxa_imposto = min(max(tax_provision / pretax_income, 0), 0.5)
+        else:
+            taxa_imposto = 0.21
+
+        nopat = operating_income * (1 - taxa_imposto)
+
+        total_debt = _primeira(bs, ["Total Debt"])
+        equity = _primeira(bs, ["Stockholders Equity", "Common Stock Equity",
+                                 "Total Equity Gross Minority Interest"])
+        cash = _primeira(bs, ["Cash And Cash Equivalents",
+                               "Cash Cash Equivalents And Short Term Investments"]) or 0
+
+        if total_debt is None or equity is None:
+            return np.nan
+
+        capital_investido = total_debt + equity - cash
+        if capital_investido <= 0:
+            return np.nan
+
+        return (nopat / capital_investido) * 100
+    except Exception:
+        return np.nan
 
 
 def calcular_metricas_dividendo(t, hist_5y):
@@ -306,7 +443,7 @@ def calcular_metricas_dividendo(t, hist_5y):
                 break
 
         # ---- CAGR do dividendo (usa até 5 anos completos de histórico) ----
-        dividend_cagr_5y = np.nan
+dividend_cagr_5y = np.nan
         if len(valores) >= 6:
             inicial, final, n_anos = valores[-6], valores[-1], 5
         elif len(valores) >= 2:
@@ -346,7 +483,9 @@ def carregar_carteira():
                 "earnings_growth": np.nan, "roe": np.nan, "profit_margin": np.nan,
                 "peg_ratio": np.nan, "payout_ratio": np.nan, "debt_to_equity": np.nan,
                 "anos_consecutivos_crescimento": np.nan, "dividend_cagr_5y": np.nan,
-                "yield_medio_5anos": np.nan,
+                "yield_medio_5anos": np.nan, "fcf_payout_ratio": np.nan,
+                "beta": np.nan, "forward_pe": np.nan, "interest_coverage": np.nan,
+                "roic": np.nan, "dividend_rate": np.nan,
             })
         linhas.append(linha)
     return pd.DataFrame(linhas)
@@ -416,13 +555,19 @@ def calcular_factor_grades(row):
         _pontos_metrica(resultados_pct, bandas["growth"], maior_melhor=True),
     ])
 
-    # ---- Profitability: ROE e margem líquida (valores em %), vs. banda do setor ----
+    # ---- Profitability: ROE, margem líquida e ROIC (valores em %), vs. banda do setor ----
     roe_pct = row.get("roe") * 100 if pd.notna(row.get("roe")) else np.nan
     margem_pct = row.get("profit_margin") * 100 if pd.notna(row.get("profit_margin")) else np.nan
-    score_profitability = np.mean([
+    componentes_profitability = [
         _pontos_metrica(roe_pct, bandas["roe"], maior_melhor=True),
         _pontos_metrica(margem_pct, bandas["margin"], maior_melhor=True),
-    ])
+    ]
+    roic = row.get("roic")
+    if pd.notna(roic):
+        # ROIC mede o retorno sobre TODO o capital (dívida + capital próprio),
+        # por isso é mais difícil de "inflacionar" com dívida do que o ROE sozinho
+        componentes_profitability.append(_pontos_metrica(roic, bandas["roic"], maior_melhor=True))
+    score_profitability = np.mean(componentes_profitability)
 
     score_quant = np.mean([score_valuation, score_growth, score_profitability])
     if score_quant >= 3.3:
@@ -445,9 +590,7 @@ def aplicar_factor_grades(df):
     """Adiciona as colunas de Factor Grades e Quant Rating ao DataFrame da carteira."""
     notas = df.apply(calcular_factor_grades, axis=1)
     return pd.concat([df, notas], axis=1)
-
-
-# ------------------------------------------------------------------
+    # ------------------------------------------------------------------
 # DIVIDEND SAFETY SCORE (A-D)
 # ------------------------------------------------------------------
 # Este é o indicador mais importante para uma estratégia de dividend growth:
@@ -462,7 +605,9 @@ def calcular_dividend_safety(row):
 
     componentes = [
         _pontos_metrica(row.get("payout_ratio"), bandas["payout"], maior_melhor=False),
+        _pontos_metrica(row.get("fcf_payout_ratio"), bandas["fcf_payout"], maior_melhor=False),
         _pontos_metrica(row.get("debt_to_equity"), bandas["debt"], maior_melhor=False),
+        _pontos_metrica(row.get("interest_coverage"), bandas["interest_coverage"], maior_melhor=True),
         _pontos_metrica(row.get("anos_consecutivos_crescimento"), [3, 6, 11], maior_melhor=True),
     ]
     cagr = row.get("dividend_cagr_5y")
@@ -487,6 +632,61 @@ def aplicar_dividend_safety(df):
 
 
 # ------------------------------------------------------------------
+# VALOR INTRÍNSECO (Dividend Discount Model / Modelo de Gordon)
+# ------------------------------------------------------------------
+# Fórmula: Valor = D1 / (r - g)
+#   D1 = próximo dividendo esperado = dividendo atual × (1 + g)
+#   r  = taxa de retorno exigida (o que tu esperas ganhar, ajustada ao risco)
+#   g  = taxa de crescimento do dividendo a longo prazo
+#
+# ⚠️ Limitações importantes (por isso isto é uma ESTIMATIVA, não uma verdade):
+#   - Só faz sentido para empresas que pagam dividendo de forma estável e previsível.
+#     Não funciona bem para ações sem histórico de dividendos ou com cortes recentes.
+#   - Assume que o dividendo cresce ao MESMO ritmo para sempre — na prática isso
+#     nunca acontece exatamente assim.
+#   - É extremamente sensível às assunções: pequenas mudanças em r ou g podem
+#     alterar o valor calculado de forma muito significativa.
+#   - Serve para teres uma referência e comparar ações entre si — não para decidir
+#     sozinho se compras ou vendes.
+
+def calcular_valor_intrinseco(row, taxa_desconto):
+    dividend_rate = row.get("dividend_rate")
+    g = row.get("dividend_cagr_5y")
+    preco = row.get("preco")
+
+    if pd.isna(dividend_rate) or not dividend_rate or dividend_rate <= 0 or pd.isna(g):
+        return np.nan, np.nan
+
+    # Limita g para o modelo não "explodir": tem de ser sempre menor que r,
+    # e não deixamos quedas pontuais de dividendo distorcerem a estimativa a mais
+    g_ajustado = min(g, taxa_desconto - 0.01)
+    g_ajustado = max(g_ajustado, -0.05)
+
+    d1 = dividend_rate * (1 + g_ajustado)
+    denominador = taxa_desconto - g_ajustado
+    if denominador <= 0:
+        return np.nan, np.nan
+
+    valor_intrinseco = d1 / denominador
+
+    if pd.isna(preco) or preco <= 0 or pd.isna(valor_intrinseco):
+        margem_seguranca = np.nan
+    else:
+        margem_seguranca = ((valor_intrinseco - preco) / valor_intrinseco) * 100
+
+    return valor_intrinseco, margem_seguranca
+
+
+def aplicar_valor_intrinseco(df, taxa_desconto):
+    """Adiciona as colunas de Valor Intrínseco e Margem de Segurança ao DataFrame."""
+    resultados = df.apply(lambda r: calcular_valor_intrinseco(r, taxa_desconto), axis=1)
+    df = df.copy()
+    df["valor_intrinseco"] = resultados.apply(lambda x: x[0])
+    df["margem_seguranca"] = resultados.apply(lambda x: x[1])
+    return df
+
+
+# ------------------------------------------------------------------
 # SIDEBAR
 # ------------------------------------------------------------------
 with st.sidebar:
@@ -505,6 +705,15 @@ with st.sidebar:
     st.markdown("**Critérios de alerta**")
     limite_minimo = st.slider("Perto do mínimo de 52 semanas (%)", 1, 30, 10)
     limite_pe = st.slider("P/E considerado atrativo (abaixo de)", 5, 40, 18)
+
+    st.divider()
+    st.markdown("**Valor Intrínseco (Dividend Discount Model)**")
+    taxa_desconto_pct = st.slider(
+        "Taxa de retorno exigida (r)", 6.0, 15.0, 9.0, step=0.5,
+        help="O retorno anual que consideras justo exigir por investir nesta ação, dado o risco. "
+             "Mais alto = valor intrínseco mais baixo (mais conservador)."
+    )
+    taxa_desconto = taxa_desconto_pct / 100
 
     st.divider()
     with st.expander("📖 Glossário para iniciantes"):
@@ -527,6 +736,18 @@ with st.sidebar:
 
 **Anos Consecutivos de Aumento** — há quantos anos seguidos o dividendo sobe sem cortes. Empresas com 10, 25+ anos (Dividend Aristocrats) são vistas como muito fiáveis.
 
+**Payout Ratio (FCF)** — a versão mais rigorosa do payout: usa o Free Cash Flow (dinheiro real gerado) em vez do lucro contabilístico, que pode ser "maquilhado" por amortizações e outros itens não-monetários.
+
+**Interest Coverage Ratio** — quantas vezes o lucro operacional cobre os juros da dívida. Abaixo de 2-3x é normalmente sinal de alerta (exceto em setores estruturalmente endividados, como bancos ou utilities).
+
+**Beta** — mede a volatilidade da ação face ao mercado. Beta 1 = mexe como o mercado; acima de 1 = mais volátil; abaixo de 1 = mais estável.
+
+**Forward P/E** — o P/E calculado com os lucros esperados pelos analistas, em vez dos já reportados. Compara-se com o P/E normal para perceber se o mercado espera crescimento.
+
+**ROIC (Return on Invested Capital)** — retorno gerado sobre TODO o capital do negócio (dívida + capital próprio), não só o capital próprio como o ROE. Mais difícil de "inflacionar" com dívida, é visto como um sinal mais fiável da qualidade real de um negócio.
+
+**Valor Intrínseco (Dividend Discount Model)** — estimativa de quanto uma ação "deveria" valer, com base nos dividendos esperados e numa taxa de retorno exigida. É uma referência, não uma verdade absoluta — só funciona bem para empresas com dividendo estável, e é sensível às assunções usadas.
+
 **Quant Rating** — nota combinada (Strong Buy / Buy / Hold) juntando Valuation + Growth + Profitability.
 
 **Dividend Safety** — nota (A-D) que diz se o dividendo atual parece sustentável a longo prazo, combinando payout, dívida e histórico de crescimento.
@@ -539,6 +760,7 @@ with st.spinner("A carregar cotações..."):
     df = carregar_carteira()
     df = aplicar_factor_grades(df)
     df = aplicar_dividend_safety(df)
+    df = aplicar_valor_intrinseco(df, taxa_desconto)
 
 st.title("📊 Painel Diário da Carteira")
 
@@ -563,9 +785,9 @@ st.divider()
 # ------------------------------------------------------------------
 # TABS
 # ------------------------------------------------------------------
-tab_resumo, tab_alertas, tab_alocacao, tab_ratings, tab_dividendos, tab_reforco, tab_detalhe = st.tabs(
+tab_resumo, tab_alertas, tab_alocacao, tab_ratings, tab_dividendos, tab_intrinseco, tab_reforco, tab_detalhe = st.tabs(
     ["📋 Resumo", "🚨 Alertas", "🥧 Alocação", "🏆 Quant Ratings", "💰 Dividend Safety",
-     "💎 Oportunidades de Reforço", "🔍 Detalhe por Ativo"]
+     "🧮 Valor Intrínseco", "💎 Oportunidades de Reforço", "🔍 Detalhe por Ativo"]
 )
 
 # ---------------- TAB RESUMO ----------------
@@ -727,8 +949,9 @@ with tab_dividendos:
     st.subheader("Dividend Safety Score")
     st.caption(
         "Diz-te se o dividendo de cada ação parece sustentável a longo prazo — não basta "
-        "o yield ser alto, tem de haver lucro e caixa para o sustentar. Combina Payout Ratio, "
-        "Debt/Equity, anos consecutivos de aumento e o ritmo real de crescimento do dividendo."
+        "o yield ser alto, tem de haver lucro e caixa para o sustentar. Combina Payout Ratio "
+        "(lucro e FCF), Debt/Equity, Cobertura de Juros, anos consecutivos de aumento e o "
+        "ritmo real de crescimento do dividendo."
     )
 
     with st.expander("❓ Como interpretar esta nota (clica para abrir)"):
@@ -751,7 +974,9 @@ Nota: para REITs e Utilities, um payout mais alto é normal (faz parte do modelo
             with col:
                 cor_n = cores_nota.get(row["grade_dividend_safety"], "#888")
                 payout_txt = formata_pct(row["payout_ratio"], 0)
+                fcf_payout_txt = formata_pct(row["fcf_payout_ratio"], 0) if pd.notna(row["fcf_payout_ratio"]) else "N/D"
                 debt_txt = f"{row['debt_to_equity']:.0f}%" if pd.notna(row["debt_to_equity"]) else "N/D"
+                cobertura_txt = f"{row['interest_coverage']:.1f}x" if pd.notna(row["interest_coverage"]) else "N/D"
                 anos_txt = f"{int(row['anos_consecutivos_crescimento'])} anos" if pd.notna(row["anos_consecutivos_crescimento"]) else "N/D"
                 cagr_txt = formata_pct(row["dividend_cagr_5y"] * 100, 1) if pd.notna(row["dividend_cagr_5y"]) else "N/D"
                 yield_5y_txt = formata_pct(row["yield_medio_5anos"], 2)
@@ -762,8 +987,10 @@ Nota: para REITs e Utilities, um payout mais alto é normal (faz parte do modelo
                     <span style="color:{cor_n}; font-weight:700; font-size:16px;">
                         {row['grade_dividend_safety']} · {row['dividend_safety_label']}
                     </span><br><br>
-                    Payout Ratio: <b>{payout_txt}</b><br>
+                    Payout Ratio (lucro): <b>{payout_txt}</b><br>
+                    Payout Ratio (FCF): <b>{fcf_payout_txt}</b><br>
                     Debt/Equity: <b>{debt_txt}</b><br>
+                    Cobertura de Juros: <b>{cobertura_txt}</b><br>
                     Anos a aumentar: <b>{anos_txt}</b><br>
                     CAGR Dividendo (5a): <b>{cagr_txt}</b><br>
                     Yield atual vs. média 5a: <b>{formata_pct(row['dividend_yield'])}</b> vs <b>{yield_5y_txt}</b>
@@ -775,6 +1002,74 @@ Nota: para REITs e Utilities, um payout mais alto é normal (faz parte do modelo
         "💡 Dica para novatos: um yield atual bem acima da média de 5 anos pode ser uma boa "
         "oportunidade (ação descontada) — mas confirma sempre com o Payout Ratio e o Debt/Equity, "
         "porque também pode ser sinal de que o mercado antecipa problemas."
+    )
+
+# ---------------- TAB VALOR INTRÍNSECO ----------------
+with tab_intrinseco:
+    st.subheader("Valor Intrínseco — Dividend Discount Model")
+    st.caption(
+        f"Estimativa de quanto cada ação 'deveria' valer, com base nos dividendos esperados "
+        f"e numa taxa de retorno exigida de **{taxa_desconto_pct:.1f}%** (ajustável na barra lateral)."
+    )
+
+    with st.expander("❓ Como funciona e principais limitações (lê antes de confiar nos números)"):
+        st.markdown("""
+**Fórmula usada (Modelo de Gordon / Dividend Discount Model):**
+
+`Valor Intrínseco = Próximo Dividendo ÷ (Taxa de Retorno Exigida − Taxa de Crescimento do Dividendo)`
+
+**⚠️ Limitações importantes — isto é uma estimativa, não uma verdade:**
+- Só faz sentido para empresas com **histórico de dividendos estável**. Ações sem dividendo, ou com cortes recentes, aparecem como "N/D" — o modelo simplesmente não se aplica a elas.
+- Assume que o dividendo cresce sempre ao mesmo ritmo, para sempre — o que nunca é exatamente verdade.
+- É **muito sensível** às assunções: mudar a taxa de retorno exigida em 1-2% pode alterar bastante o valor calculado. Usa isto para comparar ações entre si, não como um preço-alvo exato.
+- A taxa de crescimento usada é a **CAGR histórica dos últimos 5 anos** — não há garantia de que o futuro repita o passado.
+
+**Margem de Segurança** = quanto a ação está abaixo (positivo) ou acima (negativo) do valor intrínseco estimado. Quanto maior a margem positiva, maior o "desconto" teórico.
+        """)
+
+    intrinseco_df = df.copy()
+    intrinseco_df = intrinseco_df.dropna(subset=["valor_intrinseco"])
+
+    if intrinseco_df.empty:
+        st.info(
+            "Nenhum ativo tem dados suficientes (histórico de dividendos estável) para este modelo "
+            "com a taxa de retorno atual. Experimenta baixar a taxa de retorno exigida na barra lateral."
+        )
+    else:
+        intrinseco_df = intrinseco_df.sort_values("margem_seguranca", ascending=False)
+
+        tabela_intrinseco = pd.DataFrame({
+            "Ticker": intrinseco_df["ticker"],
+            "Nome": intrinseco_df["nome"],
+            "Preço Atual": intrinseco_df.apply(
+                lambda r: f"{r['preco']:.2f} {r['moeda']}" if pd.notna(r["preco"]) else "N/D", axis=1),
+            "Valor Intrínseco": intrinseco_df["valor_intrinseco"].map(lambda x: f"{x:.2f}"),
+            "Margem de Segurança": intrinseco_df["margem_seguranca"].map(formata_pct),
+        })
+
+        def cor_margem(val):
+            try:
+                v = float(str(val).replace("%", "").replace("N/D", "nan"))
+            except Exception:
+                return ""
+            if np.isnan(v):
+                return ""
+            cor = "#00c853" if v >= 0 else "#ff5252"
+            return f"color: {cor}; font-weight: 600;"
+
+        styled_intrinseco = tabela_intrinseco.style.map(cor_margem, subset=["Margem de Segurança"])
+        st.dataframe(styled_intrinseco, use_container_width=True, height=500, hide_index=True)
+
+        n_sem_dados = len(df) - len(intrinseco_df)
+        if n_sem_dados > 0:
+            st.caption(
+                f"ℹ️ {n_sem_dados} ativo(s) não aparecem na tabela por não terem histórico de dividendos "
+                "estável suficiente para aplicar este modelo (ex: ações sem dividendo ou com crescimento ≥ taxa de retorno exigida)."
+            )
+
+    st.caption(
+        "💡 Dica para novatos: usa este modelo em conjunto com o Quant Rating e o Dividend Safety — "
+        "uma margem de segurança positiva não vale muito se o dividendo estiver em risco (nota D)."
     )
 
 # ---------------- TAB OPORTUNIDADES DE REFORÇO ----------------
@@ -853,11 +1148,15 @@ with tab_detalhe:
     col_d.metric("Cap. Bolsista", formata_grande(linha["market_cap"]),
                  help="Valor total de mercado da empresa (preço da ação × nº de ações).")
 
-    col_e, col_f = st.columns(2)
+    col_e, col_f, col_e2, col_f2 = st.columns(4)
     col_e.metric("Mínimo 52 semanas", f"{linha['low_52']:.2f}" if pd.notna(linha["low_52"]) else "N/D",
                  delta=formata_pct(linha["dist_do_minimo"]) + " acima do mínimo")
     col_f.metric("Máximo 52 semanas", f"{linha['high_52']:.2f}" if pd.notna(linha["high_52"]) else "N/D",
                  delta="-" + formata_pct(linha["dist_do_maximo"]) + " abaixo do máximo")
+    col_e2.metric("Forward P/E", f"{linha['forward_pe']:.1f}" if pd.notna(linha["forward_pe"]) else "N/D",
+                  help="P/E calculado com os lucros ESPERADOS (analistas) em vez dos lucros já reportados. Se for mais baixo que o P/E normal, o mercado espera que os lucros cresçam.")
+    col_f2.metric("Beta", f"{linha['beta']:.2f}" if pd.notna(linha["beta"]) else "N/D",
+                  help="Mede a volatilidade da ação face ao mercado (S&P 500). Beta 1 = mexe como o mercado; >1 = mais volátil; <1 = mais estável. Útil para perceberes o nível de risco/oscilação a esperar.")
 
     st.divider()
     st.subheader("Factor Grades & Quant Rating")
@@ -872,6 +1171,22 @@ with tab_detalhe:
         Profitability: <span style="color:{cores_nota.get(linha['grade_profitability'])}; font-weight:700;">{linha['grade_profitability']}</span>
     </div>
     """, unsafe_allow_html=True)
+    st.metric("ROIC", formata_pct(linha["roic"], 1) if pd.notna(linha["roic"]) else "N/D",
+              help="Retorno sobre TODO o capital investido (dívida + capital próprio), não só o capital próprio como no ROE. Mais difícil de 'inflacionar' com dívida — mede a qualidade real do negócio.")
+
+    st.divider()
+    st.subheader("🧮 Valor Intrínseco")
+    if pd.notna(linha["valor_intrinseco"]):
+        cor_margem_card = "#00c853" if linha["margem_seguranca"] >= 0 else "#ff5252"
+        st.markdown(f"""
+        <div class="metric-card">
+            Valor Intrínseco estimado: <b>{linha['valor_intrinseco']:.2f} {linha['moeda']}</b> (vs. preço atual {linha['preco']:.2f} {linha['moeda']})<br>
+            Margem de Segurança: <span style="color:{cor_margem_card}; font-weight:700;">{formata_pct(linha['margem_seguranca'])}</span>
+        </div>
+        """, unsafe_allow_html=True)
+        st.caption(f"Calculado com taxa de retorno exigida de {taxa_desconto_pct:.1f}% (Dividend Discount Model — ver aba 🧮 Valor Intrínseco para detalhes e limitações).")
+    else:
+        st.info("Não há histórico de dividendos estável suficiente para aplicar este modelo a este ativo.")
 
     st.divider()
     st.subheader("💰 Dividend Safety")
@@ -883,6 +1198,12 @@ with tab_detalhe:
         </span>
     </div>
     """, unsafe_allow_html=True)
+
+    col_k, col_l = st.columns(2)
+    col_k.metric("Payout Ratio (FCF)", formata_pct(linha["fcf_payout_ratio"], 0) if pd.notna(linha["fcf_payout_ratio"]) else "N/D",
+                 help="Dividendos pagos vs. Free Cash Flow (dinheiro real gerado). Mais rigoroso que o payout baseado no lucro contabilístico, porque não é afetado por amortizações ou itens não-monetários.")
+    col_l.metric("Cobertura de Juros", f"{linha['interest_coverage']:.1f}x" if pd.notna(linha["interest_coverage"]) else "N/D",
+                 help="Quantas vezes o lucro operacional (EBIT) cobre a despesa com juros da dívida. Quanto mais alto, mais folga a empresa tem para pagar a dívida sem pôr o dividendo em risco.")
 
     col_g, col_h, col_i, col_j = st.columns(4)
     col_g.metric("Payout Ratio", formata_pct(linha["payout_ratio"], 0),
@@ -925,3 +1246,4 @@ with tab_detalhe:
 st.divider()
 st.caption("⚠️ Esta aplicação é apenas informativa e não constitui aconselhamento financeiro. "
            "Os dados são fornecidos pelo Yahoo Finance através da biblioteca yfinance e podem ter atrasos.")
+            
