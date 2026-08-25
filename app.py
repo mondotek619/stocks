@@ -443,7 +443,7 @@ def calcular_metricas_dividendo(t, hist_5y):
                 break
 
         # ---- CAGR do dividendo (usa até 5 anos completos de histórico) ----
-dividend_cagr_5y = np.nan
+        dividend_cagr_5y = np.nan
         if len(valores) >= 6:
             inicial, final, n_anos = valores[-6], valores[-1], 5
         elif len(valores) >= 2:
