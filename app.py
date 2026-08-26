@@ -1,5 +1,5 @@
 """
-Dashboard de Carteira - Ações de Longo Prazo e Dividendos
+Dashboafrd de Carteira - Ações de Longo Prazo e Dividendos
 Streamlit + yfinance
 """
 
