@@ -88,6 +88,8 @@ PORTFOLIO = [
     {"nome": "Mondelez",         "ticker": "MDLZ",    "peso": 3,  "setor": "Consumo Básico"},
     {"nome": "NextEra Energy",   "ticker": "NEE",     "peso": 3,  "setor": "Utilities"},
     {"nome": "American Water Works", "ticker": "AWK", "peso": 3, "setor": "Utilities"},
+    {"nome": "Nestlé",           "ticker": "NSRGY",   "peso": 4,  "setor": "Consumo Básico"},
+    {"nome": "Unilever",         "ticker": "UL",      "peso": 4,  "setor": "Consumo Básico"},
 ]
 
 TICKERS = [a["ticker"] for a in PORTFOLIO]
